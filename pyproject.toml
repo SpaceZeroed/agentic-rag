@@ -9,8 +9,11 @@ description = "An incrementally built ML/LLM technical documentation assistant."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.14,<2",
+    "psycopg[binary]>=3.2,<4",
     "pydantic>=2.10,<3",
     "pydantic-settings>=2.7,<3",
+    "sqlalchemy>=2.0,<2.1",
 ]
 
 [project.scripts]
@@ -48,3 +51,4 @@ warn_required_dynamic_aliases = true
 testpaths = ["tests"]
 addopts = "-ra --strict-config --strict-markers --import-mode=importlib"
 filterwarnings = ["error"]
+markers = ["postgres: real PostgreSQL integration; requires --postgres-url"]

@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 type LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -27,3 +28,4 @@ class Settings(BaseSettings):
     environment: Literal["local", "test", "production"] = "local"
     log_level: LogLevel = "INFO"
     data_dir: Path = Path("data")
+    database_url: SecretStr | None = None

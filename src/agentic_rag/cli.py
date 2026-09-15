@@ -1,17 +1,90 @@
-"""Stage 0 startup check; this does not start a service or run retrieval."""
+"""Application entry point: startup, text ingestion, and database migrations."""
 
+import argparse
+import json
 import logging
+from collections.abc import Sequence
+from dataclasses import asdict
+from pathlib import Path
+from uuid import UUID
 
+from alembic.util.exc import CommandError
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from agentic_rag.core.config import Settings
 from agentic_rag.core.logging import configure_logging
+from agentic_rag.ingestion.models import ChunkingConfig
+from agentic_rag.ingestion.parsing import DocumentInputError
+from agentic_rag.ingestion.service import prepare_document
+from agentic_rag.storage.database import create_database_engine, upgrade_database
+from agentic_rag.storage.repository import PostgresDocumentRepository
 
 logger = logging.getLogger(__name__)
 
 
-def main() -> int:
-    """Validate configuration, initialize logs, and report startup status."""
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="ML/LLM document ingestion")
+    commands = parser.add_subparsers(dest="command")
+    for name in ("preview", "ingest"):
+        command = commands.add_parser(name, help=f"{name.capitalize()} a UTF-8 Markdown/TXT file")
+        command.add_argument("path", type=Path)
+        command.add_argument(
+            "--source-uri", help="Stable file/HTTP/HTTPS identity; no URL is fetched"
+        )
+        command.add_argument("--max-chars", type=int, default=1200)
+        command.add_argument("--overlap", type=int, default=200)
+    commands.add_parser("db-upgrade", help="Apply packaged Alembic migrations")
+    show = commands.add_parser("show", help="Read a stored document and its chunks as JSON")
+    show.add_argument("document_id", type=UUID)
+    show.add_argument(
+        "--revision", type=UUID, help="Read a retained revision instead of the current one"
+    )
+    return parser
+
+
+def _execute(args: argparse.Namespace, settings: Settings) -> int:
+    prepared = None
+    if args.command in {"preview", "ingest"}:
+        prepared = prepare_document(
+            args.path,
+            ChunkingConfig(args.max_chars, args.overlap),
+            source_uri=args.source_uri,
+        )
+        if args.command == "preview":
+            print(json.dumps(asdict(prepared), ensure_ascii=False, default=str))
+            return 0
+    if settings.database_url is None:
+        logger.error("database_url_required")
+        return 2
+    engine = create_database_engine(settings.database_url.get_secret_value())
+    try:
+        if args.command == "db-upgrade":
+            upgrade_database(engine)
+            logger.info("database_upgraded")
+            return 0
+        repository = PostgresDocumentRepository(engine)
+        if args.command == "ingest" and prepared is not None:
+            result = repository.save(prepared)
+            print(json.dumps(asdict(result), default=str))
+            logger.info(
+                "document_ingested",
+                extra={"fields": {"document_id": str(result.document_id), "status": result.status}},
+            )
+            return 0
+        document = repository.get(args.document_id, revision_id=args.revision)
+        if document is None:
+            logger.error("document_not_found")
+            return 1
+        print(json.dumps(asdict(document), ensure_ascii=False, default=str))
+        return 0
+    finally:
+        engine.dispose()
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Validate external inputs and keep infrastructure errors out of logs."""
+    args = build_parser().parse_args(argv)
     try:
         settings = Settings()
     except ValidationError as exc:
@@ -25,6 +98,16 @@ def main() -> int:
         return 2
 
     configure_logging(settings.log_level)
+    if args.command is not None:
+        try:
+            return _execute(args, settings)
+        except (DocumentInputError, OSError, ValueError) as exc:
+            logger.error("input_invalid", extra={"fields": {"error_type": type(exc).__name__}})
+            return 2
+        except (SQLAlchemyError, CommandError) as exc:
+            # Driver messages may contain connection credentials or document text.
+            logger.error("database_failed", extra={"fields": {"error_type": type(exc).__name__}})
+            return 1
     logger.info(
         "application_ready",
         extra={
