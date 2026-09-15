@@ -1,0 +1,29 @@
+# Python environments, caches, and build artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
+build/
+dist/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local configuration and generated data; keep the safe example and uv.lock.
+.env
+.env.*
+!.env.example
+data/
+artifacts/
+*.log
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
