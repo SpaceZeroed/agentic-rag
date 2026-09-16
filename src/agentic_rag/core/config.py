@@ -29,3 +29,11 @@ class Settings(BaseSettings):
     log_level: LogLevel = "INFO"
     data_dir: Path = Path("data")
     database_url: SecretStr | None = None
+    qdrant_url: str = "http://127.0.0.1:6333"
+    qdrant_api_key: SecretStr | None = None
+    collection_prefix: str = "rag_dense"
+    embedding_model: str = "intfloat/multilingual-e5-small"
+    embedding_revision: str = "614241f622f53c4eeff9890bdc4f31cfecc418b3"
+    embedding_batch_size: int = 8
+    embedding_threads: int = 4
+    model_local_files_only: bool = False

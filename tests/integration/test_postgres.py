@@ -1,7 +1,6 @@
 import json
 import subprocess
 import sys
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
@@ -13,38 +12,14 @@ from alembic import command
 from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from sqlalchemy.schema import CreateSchema, DropSchema
 
 from agentic_rag.ingestion.models import ChunkingConfig, IngestResult, PreparedDocument
 from agentic_rag.ingestion.service import prepare_document
-from agentic_rag.storage.database import create_database_engine, migration_config, upgrade_database
+from agentic_rag.storage.database import migration_config, upgrade_database
 from agentic_rag.storage.models import ChunkRow, DocumentRow, RevisionRow
 from agentic_rag.storage.repository import PostgresDocumentRepository
 
 pytestmark = pytest.mark.postgres
-
-
-@pytest.fixture
-def database(request: pytest.FixtureRequest) -> Iterator[Engine]:
-    url = request.config.getoption("--postgres-url")
-    if not url:
-        pytest.skip("Use --postgres-url to run against real PostgreSQL")
-    admin = create_database_engine(str(url))
-    schema = f"rag_test_{uuid4().hex}"
-    with admin.begin() as connection:
-        connection.execute(CreateSchema(schema))
-    scoped_url = admin.url.update_query_dict(
-        {"options": f"-csearch_path={schema} -cstatement_timeout=30000 -clock_timeout=10000"}
-    )
-    engine = create_database_engine(scoped_url.render_as_string(hide_password=False))
-    try:
-        upgrade_database(engine)
-        yield engine
-    finally:
-        engine.dispose()
-        with admin.begin() as connection:
-            connection.execute(DropSchema(schema, cascade=True))
-        admin.dispose()
 
 
 def prepare(

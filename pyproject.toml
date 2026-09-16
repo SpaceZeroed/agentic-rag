@@ -13,8 +13,20 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "pydantic>=2.10,<3",
     "pydantic-settings>=2.7,<3",
+    "qdrant-client>=1.17,<1.18",
     "sqlalchemy>=2.0,<2.1",
 ]
+
+[project.optional-dependencies]
+embeddings = ["torch>=2.6,<3", "transformers>=4.48,<5", "sentencepiece>=0.2,<1"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" }]
 
 [project.scripts]
 agentic-rag = "agentic_rag.cli:main"

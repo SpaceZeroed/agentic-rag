@@ -1,4 +1,4 @@
-# Development image: defaults to a startup check; also supports Stage 1 CLI commands.
+# Development image: CPU model dependencies are optional (see dense retrieval guide).
 FROM python:3.12-slim-bookworm
 COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /uvx /bin/
 
@@ -15,6 +15,7 @@ RUN uv sync --locked --no-install-project
 COPY src ./src
 COPY tests ./tests
 COPY examples ./examples
+COPY benchmarks ./benchmarks
 RUN uv sync --locked
 
 RUN useradd --create-home --uid 10001 appuser \

@@ -15,5 +15,13 @@ services:
       timeout: 3s
       retries: 30
 
+  qdrant:
+    image: qdrant/qdrant:v1.17.0
+    ports:
+      - "127.0.0.1:${RAG_QDRANT_PORT:-6333}:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
 volumes:
   postgres_data:
+  qdrant_data:

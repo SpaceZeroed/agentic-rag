@@ -1,0 +1,378 @@
+{
+  "name": "dense-v1-authored-dev",
+  "label_policy": "Assistant-authored English reading notes and bilingual questions. Evidence spans fixed before retrieval; all chunks containing a complete annotated span are relevant (binary). Other chunks are unjudged and scored as nonrelevant. Human review pending. Development smoke set, not held-out quality evidence.",
+  "max_chars": 400,
+  "overlap": 60,
+  "documents": [
+    {
+      "key": "lora",
+      "path": "corpus/lora.md",
+      "source_uri": "https://arxiv.org/abs/2106.09685#agentic-rag-note-v1",
+      "sha256": "7a2c8e2bbcc2643ca355213b658d34e5802524ba28c1a4048a2b992732eaae1c"
+    },
+    {
+      "key": "qlora",
+      "path": "corpus/qlora.md",
+      "source_uri": "https://arxiv.org/abs/2305.14314#agentic-rag-note-v1",
+      "sha256": "62b45028f3af2b23e10ee38e20fc58e6473ed9cb23ed6d0bce175e52e7a99916"
+    },
+    {
+      "key": "paged_attention",
+      "path": "corpus/paged_attention.md",
+      "source_uri": "https://arxiv.org/abs/2309.06180#agentic-rag-note-v1",
+      "sha256": "09eeeb85f6f92df43c0c2b5a12f85adc9d152440d8e003f54dacf2f85fde23d7"
+    },
+    {
+      "key": "flash_attention",
+      "path": "corpus/flash_attention.md",
+      "source_uri": "https://arxiv.org/abs/2205.14135#agentic-rag-note-v1",
+      "sha256": "cbd2cd33336084ff5aa82dc30187663dcf896845ccd317945be97a9c867455c3"
+    },
+    {
+      "key": "dpr",
+      "path": "corpus/dpr.md",
+      "source_uri": "https://arxiv.org/abs/2004.04906#agentic-rag-note-v1",
+      "sha256": "ab5ef66b836d514a530a814a3880cd7818264bd30afdb4c6ca135bd369458667"
+    },
+    {
+      "key": "colbert",
+      "path": "corpus/colbert.md",
+      "source_uri": "https://arxiv.org/abs/2004.12832#agentic-rag-note-v1",
+      "sha256": "a588d4507e6341bbf919adc4606fbf4faded6deb1a7ed726e641e92e3600132a"
+    },
+    {
+      "key": "rag",
+      "path": "corpus/rag.md",
+      "source_uri": "https://arxiv.org/abs/2005.11401#agentic-rag-note-v1",
+      "sha256": "695fbc4fa1be69497d3a2fc954e029258e642c65d88276a125501e89e6eb1ad9"
+    },
+    {
+      "key": "speculative",
+      "path": "corpus/speculative.md",
+      "source_uri": "https://arxiv.org/abs/2211.17192#agentic-rag-note-v1",
+      "sha256": "fcc0ae30b5a34cf1a2a2822f052cd7b5f23dfa383da3738ab5f2965e16fd71ec"
+    },
+    {
+      "key": "transformer",
+      "path": "corpus/transformer.md",
+      "source_uri": "https://arxiv.org/abs/1706.03762#agentic-rag-note-v1",
+      "sha256": "cf22d245433268f8c7dd573417b53894cedce511f2882681bdc4fab30d8b184b"
+    },
+    {
+      "key": "rope",
+      "path": "corpus/rope.md",
+      "source_uri": "https://arxiv.org/abs/2104.09864#agentic-rag-note-v1",
+      "sha256": "17b36f9b3e64c85066c75f6074365eb71f2610355ac5a3c21f88d7b59da20075"
+    }
+  ],
+  "questions": [
+    {
+      "id": "lora_en",
+      "language": "en",
+      "query": "Which adaptation method keeps pretrained weights fixed and learns a low-rank update?",
+      "evidence": [
+        {
+          "document": "lora",
+          "text": "LoRA freezes the pretrained weights and trains low-rank matrices for weight updates.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "lora_ru",
+      "language": "ru",
+      "query": "Какой метод адаптации замораживает исходные веса и обучает низкоранговое обновление?",
+      "evidence": [
+        {
+          "document": "lora",
+          "text": "LoRA freezes the pretrained weights and trains low-rank matrices for weight updates.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "qlora_en",
+      "language": "en",
+      "query": "Which fine-tuning approach combines a four-bit frozen model with trainable adapters?",
+      "evidence": [
+        {
+          "document": "qlora",
+          "text": "QLoRA trains low-rank adapters through a frozen base model stored in 4-bit precision.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "qlora_ru",
+      "language": "ru",
+      "query": "Какой подход к дообучению сочетает замороженную четырёхбитную модель с обучаемыми адаптерами?",
+      "evidence": [
+        {
+          "document": "qlora",
+          "text": "QLoRA trains low-rank adapters through a frozen base model stored in 4-bit precision.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "paged_attention_en",
+      "language": "en",
+      "query": "How can an inference server avoid reserving contiguous memory for each growing key-value cache?",
+      "evidence": [
+        {
+          "document": "paged_attention",
+          "text": "PagedAttention stores the KV cache in blocks that need not occupy contiguous physical memory.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "paged_attention_ru",
+      "language": "ru",
+      "query": "Как сервер инференса избегает выделения непрерывной области памяти под растущий KV-кеш?",
+      "evidence": [
+        {
+          "document": "paged_attention",
+          "text": "PagedAttention stores the KV cache in blocks that need not occupy contiguous physical memory.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "flash_attention_en",
+      "language": "en",
+      "query": "Which exact attention algorithm reduces GPU memory traffic by processing tiles?",
+      "evidence": [
+        {
+          "document": "flash_attention",
+          "text": "FlashAttention computes exact attention using tiling to reduce transfers between GPU memory levels.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "flash_attention_ru",
+      "language": "ru",
+      "query": "Какой алгоритм точного attention сокращает обмен с памятью GPU за счёт обработки блоками?",
+      "evidence": [
+        {
+          "document": "flash_attention",
+          "text": "FlashAttention computes exact attention using tiling to reduce transfers between GPU memory levels.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "dpr_en",
+      "language": "en",
+      "query": "Which retriever independently encodes questions and passages for dot-product ranking?",
+      "evidence": [
+        {
+          "document": "dpr",
+          "text": "DPR encodes questions and passages separately and ranks passages by the dot product of their vectors.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "dpr_ru",
+      "language": "ru",
+      "query": "Какой поисковый метод независимо кодирует вопросы и пассажи для ранжирования скалярным произведением?",
+      "evidence": [
+        {
+          "document": "dpr",
+          "text": "DPR encodes questions and passages separately and ranks passages by the dot product of their vectors.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "colbert_en",
+      "language": "en",
+      "query": "Which retrieval architecture uses precomputed token vectors and MaxSim late interaction?",
+      "evidence": [
+        {
+          "document": "colbert",
+          "text": "ColBERT keeps token vectors and scores query-document matches with late interaction.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "colbert_ru",
+      "language": "ru",
+      "query": "Какая поисковая архитектура использует заранее рассчитанные векторы токенов и позднее взаимодействие MaxSim?",
+      "evidence": [
+        {
+          "document": "colbert",
+          "text": "ColBERT keeps token vectors and scores query-document matches with late interaction.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "rag_en",
+      "language": "en",
+      "query": "Which architecture combines information in model weights with retrieved external memory?",
+      "evidence": [
+        {
+          "document": "rag",
+          "text": "RAG combines a parametric language model with non-parametric memory accessed through retrieval.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "rag_ru",
+      "language": "ru",
+      "query": "Какая архитектура объединяет знания в весах модели с извлекаемой внешней памятью?",
+      "evidence": [
+        {
+          "document": "rag",
+          "text": "RAG combines a parametric language model with non-parametric memory accessed through retrieval.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "speculative_en",
+      "language": "en",
+      "query": "How can a small model draft tokens while a larger model preserves its target sampling distribution?",
+      "evidence": [
+        {
+          "document": "speculative",
+          "text": "Speculative decoding lets a small draft model propose tokens that a larger target model verifies.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "speculative_ru",
+      "language": "ru",
+      "query": "Как малая модель может предлагать токены, сохраняя распределение сэмплирования большой модели?",
+      "evidence": [
+        {
+          "document": "speculative",
+          "text": "Speculative decoding lets a small draft model propose tokens that a larger target model verifies.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "transformer_en",
+      "language": "en",
+      "query": "Which encoder-decoder architecture uses attention instead of recurrent layers?",
+      "evidence": [
+        {
+          "document": "transformer",
+          "text": "The Transformer replaces recurrence with attention mechanisms in its encoder-decoder architecture.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "transformer_ru",
+      "language": "ru",
+      "query": "Какая архитектура энкодера-декодера использует attention вместо рекуррентных слоёв?",
+      "evidence": [
+        {
+          "document": "transformer",
+          "text": "The Transformer replaces recurrence with attention mechanisms in its encoder-decoder architecture.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "rope_en",
+      "language": "en",
+      "query": "Which position representation rotates queries and keys to express relative offsets in attention?",
+      "evidence": [
+        {
+          "document": "rope",
+          "text": "RoPE encodes positions by rotating query and key vectors so their dot product depends on relative position.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "rope_ru",
+      "language": "ru",
+      "query": "Какое позиционное представление вращает query и key, отражая относительное расстояние в attention?",
+      "evidence": [
+        {
+          "document": "rope",
+          "text": "RoPE encodes positions by rotating query and key vectors so their dot product depends on relative position.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "adapters_en",
+      "language": "en",
+      "query": "Find both low-rank adaptation and its four-bit fine-tuning extension.",
+      "evidence": [
+        {
+          "document": "lora",
+          "text": "LoRA freezes the pretrained weights and trains low-rank matrices for weight updates.",
+          "grade": 1
+        },
+        {
+          "document": "qlora",
+          "text": "QLoRA trains low-rank adapters through a frozen base model stored in 4-bit precision.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "adapters_ru",
+      "language": "ru",
+      "query": "Найди низкоранговую адаптацию и её расширение для четырёхбитного дообучения.",
+      "evidence": [
+        {
+          "document": "lora",
+          "text": "LoRA freezes the pretrained weights and trains low-rank matrices for weight updates.",
+          "grade": 1
+        },
+        {
+          "document": "qlora",
+          "text": "QLoRA trains low-rank adapters through a frozen base model stored in 4-bit precision.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "attention_memory_en",
+      "language": "en",
+      "query": "Compare block-based KV cache management with tiled exact attention computation.",
+      "evidence": [
+        {
+          "document": "paged_attention",
+          "text": "PagedAttention stores the KV cache in blocks that need not occupy contiguous physical memory.",
+          "grade": 1
+        },
+        {
+          "document": "flash_attention",
+          "text": "FlashAttention computes exact attention using tiling to reduce transfers between GPU memory levels.",
+          "grade": 1
+        }
+      ]
+    },
+    {
+      "id": "attention_memory_ru",
+      "language": "ru",
+      "query": "Сравни управление KV-кешем по блокам и вычисление точного attention с помощью tiling.",
+      "evidence": [
+        {
+          "document": "paged_attention",
+          "text": "PagedAttention stores the KV cache in blocks that need not occupy contiguous physical memory.",
+          "grade": 1
+        },
+        {
+          "document": "flash_attention",
+          "text": "FlashAttention computes exact attention using tiling to reduce transfers between GPU memory levels.",
+          "grade": 1
+        }
+      ]
+    }
+  ]
+}

@@ -76,3 +76,21 @@ class ChunkRow(Base):
     end_char: Mapped[int]
     start_line: Mapped[int]
     end_line: Mapped[int]
+
+
+class VectorSyncRow(Base):
+    __tablename__ = "vector_sync_states"
+    __table_args__ = (
+        CheckConstraint("state IN ('pending', 'ready', 'failed')", name="ck_vector_sync_state"),
+        CheckConstraint("chunk_count > 0", name="ck_vector_sync_count"),
+    )
+
+    collection: Mapped[str] = mapped_column(String(128), primary_key=True)
+    revision_id: Mapped[UUID] = mapped_column(
+        ForeignKey("document_revisions.id", ondelete="CASCADE"), primary_key=True
+    )
+    state: Mapped[str] = mapped_column(String(16))
+    attempt: Mapped[UUID]
+    chunk_count: Mapped[int]
+    error_type: Mapped[str | None] = mapped_column(String(128))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
