@@ -8,14 +8,17 @@ from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
 from time import perf_counter
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from agentic_rag.evaluation.metrics import retrieval_metrics
 from agentic_rag.ingestion.models import ChunkingConfig, DocumentWriter, PreparedDocument
 from agentic_rag.ingestion.service import prepare_document
+from agentic_rag.retrieval.hybrid import HybridRetriever
 from agentic_rag.retrieval.models import SearchFilter
 from agentic_rag.retrieval.service import DenseRetriever
+from agentic_rag.retrieval.sparse import TOKENIZER_VERSION, BM25Config, SparseRetriever
 
 
 class Source(BaseModel):
@@ -88,7 +91,13 @@ def load_dataset(
     return dataset, documents, labels
 
 
-def evaluate(path: Path, retriever: DenseRetriever, writer: DocumentWriter) -> dict[str, object]:
+def evaluate(
+    path: Path,
+    retriever: DenseRetriever,
+    writer: DocumentWriter,
+    *,
+    mode: Literal["dense", "bm25", "hybrid"] = "dense",
+) -> dict[str, object]:
     dataset, documents, labels = load_dataset(path)
     for document in documents.values():
         writer.save(document)
@@ -102,9 +111,16 @@ def evaluate(path: Path, retriever: DenseRetriever, writer: DocumentWriter) -> d
     aggregates: dict[str, list[float]] = defaultdict(list)
     by_language: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     cases: list[dict[str, object]] = []
+    sparse = SparseRetriever(retriever.catalog, collection=retriever.index.collection)
+    hybrid = HybridRetriever(retriever)
     for question in dataset.questions:
         started = perf_counter()
-        hits = retriever.search(question.query, k=5, filters=filters, exact=True)
+        if mode == "bm25":
+            hits = sparse.search(question.query, k=5, filters=filters)
+        elif mode == "hybrid":
+            hits = hybrid.search(question.query, k=5, filters=filters, exact=True)
+        else:
+            hits = retriever.search(question.query, k=5, filters=filters, exact=True)
         elapsed = perf_counter() - started
         ranked = [str(hit.chunk_id) for hit in hits]
         metrics = {}
@@ -132,7 +148,17 @@ def evaluate(path: Path, retriever: DenseRetriever, writer: DocumentWriter) -> d
                 "search_seconds": elapsed,
             }
         )
+    if set(retriever.catalog.searchable_revisions(retriever.index.collection, filters)) != allowed:
+        raise RuntimeError("Dataset revision readiness changed during evaluation")
     return {
+        "mode": mode,
+        "retrieval_config": {
+            "bm25": asdict(BM25Config()),
+            "tokenizer": TOKENIZER_VERSION,
+            "candidate_k": 20,
+            "rrf_rank_constant": 60,
+            "corpus_policy": "filtered current+ready chunks; rebuild BM25 per query",
+        },
         "dataset": dataset.name,
         "dataset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "label_policy": dataset.label_policy,
@@ -158,4 +184,18 @@ def evaluate(path: Path, retriever: DenseRetriever, writer: DocumentWriter) -> d
             for language, values_by_key in by_language.items()
         },
         "cases": cases,
+    }
+
+
+def compare(path: Path, retriever: DenseRetriever, writer: DocumentWriter) -> dict[str, object]:
+    modes: tuple[Literal["dense", "bm25", "hybrid"], ...] = ("dense", "bm25", "hybrid")
+    reports = {mode: evaluate(path, retriever, writer, mode=mode) for mode in modes}
+    if len({str(report["dataset_sha256"]) for report in reports.values()}) != 1:
+        raise RuntimeError("Dataset changed between comparison runs")
+    return {
+        "metrics": {mode: report["metrics"] for mode, report in reports.items()},
+        "runs": reports,
+        "timing_policy": (
+            "Sequential runs; model loading excluded; BM25 rebuild included. Not a load benchmark."
+        ),
     }

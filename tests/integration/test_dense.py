@@ -10,7 +10,7 @@ from sqlalchemy import Engine
 from agentic_rag.embeddings.base import EmbeddingSpec
 from agentic_rag.ingestion.models import ChunkingConfig, PreparedDocument
 from agentic_rag.ingestion.service import prepare_document
-from agentic_rag.retrieval.models import SearchFilter
+from agentic_rag.retrieval.models import Candidate, SearchFilter, SearchHit
 from agentic_rag.retrieval.qdrant import QdrantVectorIndex
 from agentic_rag.retrieval.service import DenseRetriever
 from agentic_rag.storage.repository import PostgresDocumentRepository
@@ -151,3 +151,72 @@ def test_incompatible_collection_is_rejected(index: QdrantVectorIndex) -> None:
         index.ensure(index.spec)
     other = QdrantVectorIndex(index.client, replace(index.spec, revision="b" * 40))
     assert other.collection != index.collection
+
+
+def test_sparse_works_without_vectors_and_rechecks_current_revision(
+    database: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from agentic_rag.retrieval.sparse import SparseRetriever
+
+    repo = PostgresDocumentRepository(database)
+    old = document(tmp_path, "alpha")
+    repo.save(old)
+    catalog = PostgresIndexCatalog(database)
+    sparse = SparseRetriever(catalog)
+    assert sparse.search("alpha")[0].revision_id == old.revision_id
+    assert sparse.search("alpha", filters=SearchFilter(media_type="text/plain")) == []
+    new = document(tmp_path, "beta")
+    original = catalog.hydrate
+
+    def change_before_hydration(
+        collection: str | None, candidates: Sequence[Candidate]
+    ) -> list[SearchHit]:
+        repo.save(new)
+        return original(collection, candidates)
+
+    monkeypatch.setattr(catalog, "hydrate", change_before_hydration)
+    assert sparse.search("alpha") == []
+    assert sparse.search("beta")[0].revision_id == new.revision_id
+
+
+def test_hybrid_ready_policy_filters_and_final_recheck(
+    database: Engine, index: QdrantVectorIndex, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from agentic_rag.retrieval.hybrid import HybridRetriever
+
+    repo = PostgresDocumentRepository(database)
+    old = document(tmp_path, "alpha")
+    repo.save(old)
+    dense = retriever(database, index)
+    hybrid = HybridRetriever(dense, candidate_k=5)
+    assert hybrid.search("alpha") == []
+    dense.sync()
+    assert hybrid.search("alpha", k=1)[0].score == pytest.approx(2 / 61)
+    assert hybrid.search("alpha", filters=SearchFilter(document_ids=(uuid4(),))) == []
+    original = hybrid.sparse.search
+
+    def switch(query: str, *, k: int = 5, filters: SearchFilter | None = None) -> list[SearchHit]:
+        hits = original(query, k=k, filters=filters)
+        repo.save(document(tmp_path, "beta"))
+        return hits
+
+    monkeypatch.setattr(hybrid.sparse, "search", switch)
+    assert hybrid.search("alpha") == []
+
+
+def test_sparse_cli_needs_neither_model_nor_qdrant(
+    database: Engine,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import json
+
+    from agentic_rag.cli import main
+
+    PostgresDocumentRepository(database).save(document(tmp_path, "alpha"))
+    monkeypatch.setenv("RAG_DATABASE_URL", database.url.render_as_string(hide_password=False))
+    monkeypatch.setenv("RAG_QDRANT_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("RAG_EMBEDDING_MODEL", "does-not-exist")
+    assert main(["search", "alpha", "--mode", "bm25"]) == 0
+    assert len(json.loads(capsys.readouterr().out)["hits"]) == 1

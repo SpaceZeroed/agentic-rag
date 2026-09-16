@@ -29,3 +29,9 @@ Keep the first measured report in `results/e5_cpu.json`; use another output path
 for repeats. Repeated evaluation activates these fixed revisions in PostgreSQL
 and uses only these documents. It is a data-writing evaluation command.
 See [results](../../docs/results.md) and the [guide](../../docs/dense_retrieval.md).
+
+Stage 3 adds `results/comparison_cpu.json` using the same unmodified corpus/qrels.
+Run `evaluate` with `--compare` to compare dense, BM25 and RRF. Parameters were
+chosen before measurement: k1=1.2, b=.75, candidate depth 20, RRF constant 60.
+This depth covers the whole 20-chunk corpus; larger-corpus candidate recall remains
+unmeasured. See the Stage 3 entry in results.md for language splits and limitations.

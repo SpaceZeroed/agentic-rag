@@ -109,22 +109,23 @@ class PostgresIndexCatalog:
         with Session(self.engine) as session:
             return [revision_id for _, revision_id in session.execute(statement)]
 
-    def hydrate(self, collection: str, candidates: Sequence[Candidate]) -> list[SearchHit]:
+    def hydrate(self, collection: str | None, candidates: Sequence[Candidate]) -> list[SearchHit]:
         if not candidates:
             return []
-        # Recheck current + ready in one SQL snapshot after vector retrieval.
+        # None is lexical-only: current canonical text needs no vector-ready status.
         statement = (
             select(ChunkRow, RevisionRow, DocumentRow)
             .join(RevisionRow, ChunkRow.revision_id == RevisionRow.id)
             .join(DocumentRow, DocumentRow.id == RevisionRow.document_id)
-            .join(VectorSyncRow, VectorSyncRow.revision_id == RevisionRow.id)
             .where(
                 ChunkRow.id.in_([candidate.chunk_id for candidate in candidates]),
                 RevisionRow.is_current,
-                VectorSyncRow.collection == collection,
-                VectorSyncRow.state == "ready",
             )
         )
+        if collection is not None:
+            statement = statement.join(
+                VectorSyncRow, VectorSyncRow.revision_id == RevisionRow.id
+            ).where(VectorSyncRow.collection == collection, VectorSyncRow.state == "ready")
         with Session(self.engine) as session:
             rows = {
                 chunk.id: (chunk, revision, document)

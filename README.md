@@ -5,14 +5,14 @@ about ML papers and technical documentation using traceable evidence. The target
 system combines retrieval, cited generation, a single tool-using agent, evaluation,
 and local model inference.
 
-**Current status: Stage 2 — dense retrieval.** Markdown/TXT ingestion retains
+**Current status: Stage 3 — dense, BM25 and hybrid retrieval.** Markdown/TXT ingestion retains
 canonical revisions in PostgreSQL. A pinned multilingual E5 model runs on CPU;
 Qdrant searches current indexed chunks with metadata filters. A fixed authored
 development set records actual retrieval metrics. Generation and HTTP endpoints
 remain future milestones.
 
-See the Russian guides for [ingestion](docs/ingestion.md) and
-[dense retrieval](docs/dense_retrieval.md), including consistency, evaluation and
+See the Russian guides for [ingestion](docs/ingestion.md),
+[dense retrieval](docs/dense_retrieval.md) and [BM25/hybrid](docs/sparse_hybrid.md), including consistency, evaluation and
 reproduction commands. The first dense run measured Recall@5 = 0.9792 and
 MRR@5 = 0.8438 on **10 short authored notes / 20 chunks / 24 EN+RU questions**.
 This is a development smoke set with pending human label review, not held-out
@@ -97,6 +97,24 @@ nor Torch. Qdrant is bound to loopback port 6333 and retains a named volume.
 Use `index` after ingesting your own documents; `evaluate` ingests/indexes its fixed
 set automatically. See the [guide](docs/dense_retrieval.md) for filters and real
 PostgreSQL/Qdrant/model tests.
+
+## BM25 and hybrid search
+
+BM25 uses current PostgreSQL chunks and requires no model or Qdrant. Hybrid uses
+both dense and BM25 ranks with reciprocal rank fusion. Search defaults to dense.
+
+```bash
+uv run --locked --extra embeddings agentic-rag search "KV cache blocks" --mode bm25 --k 5
+uv run --locked --extra embeddings agentic-rag search "KV cache blocks" \
+  --mode hybrid --collection-prefix rag_dense_v1 --candidate-k 20 --k 5
+uv run --locked --extra embeddings agentic-rag evaluate benchmarks/dense_v1/dataset.json \
+  --compare --collection-prefix rag_dense_v1 --output artifacts/comparison.json
+```
+
+On the unchanged development set, hybrid MRR@5 was 0.8993 versus dense 0.8438;
+Recall@5 remained 0.9792. BM25 Recall@5 was 0.7500. These are small-set observations,
+not general quality guarantees. The current lexical index is rebuilt on each query;
+this cost is included in reported latency. See [results](docs/results.md).
 
 ## Configuration and logs
 
@@ -225,7 +243,7 @@ docs/
 
 Start with [architecture](docs/architecture.md), then the
 [roadmap](docs/roadmap.md) and [interview notes](docs/interview_notes.md).
-Stages 0–2 are implemented. The next stage, after review, is sparse/hybrid retrieval.
+Stages 0–3 are implemented. The next stage, after review, is cross-encoder reranking.
 
 To continue in a new chat, read the [conversation handoff](docs/handoff.md) and
 the [original project brief](docs/project_brief.md). They preserve the working
