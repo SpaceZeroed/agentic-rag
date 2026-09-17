@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "name": "rag_v1",
+  "label_policy": "Assistant-authored development labels, fixed before running RAG. Pending human review; no held-out split. Unanswerable means absent from this complete ten-note corpus. References are evaluation-only, never generation input.",
+  "max_chars": 400,
+  "overlap": 60,
+  "documents": [
+    {
+      "key": "lora",
+      "path": "../dense_v1/corpus/lora.md",
+      "source_uri": "https://arxiv.org/abs/2106.09685#agentic-rag-note-v1",
+      "sha256": "7a2c8e2bbcc2643ca355213b658d34e5802524ba28c1a4048a2b992732eaae1c"
+    },
+    {
+      "key": "qlora",
+      "path": "../dense_v1/corpus/qlora.md",
+      "source_uri": "https://arxiv.org/abs/2305.14314#agentic-rag-note-v1",
+      "sha256": "62b45028f3af2b23e10ee38e20fc58e6473ed9cb23ed6d0bce175e52e7a99916"
+    },
+    {
+      "key": "paged_attention",
+      "path": "../dense_v1/corpus/paged_attention.md",
+      "source_uri": "https://arxiv.org/abs/2309.06180#agentic-rag-note-v1",
+      "sha256": "09eeeb85f6f92df43c0c2b5a12f85adc9d152440d8e003f54dacf2f85fde23d7"
+    },
+    {
+      "key": "flash_attention",
+      "path": "../dense_v1/corpus/flash_attention.md",
+      "source_uri": "https://arxiv.org/abs/2205.14135#agentic-rag-note-v1",
+      "sha256": "cbd2cd33336084ff5aa82dc30187663dcf896845ccd317945be97a9c867455c3"
+    },
+    {
+      "key": "dpr",
+      "path": "../dense_v1/corpus/dpr.md",
+      "source_uri": "https://arxiv.org/abs/2004.04906#agentic-rag-note-v1",
+      "sha256": "ab5ef66b836d514a530a814a3880cd7818264bd30afdb4c6ca135bd369458667"
+    },
+    {
+      "key": "colbert",
+      "path": "../dense_v1/corpus/colbert.md",
+      "source_uri": "https://arxiv.org/abs/2004.12832#agentic-rag-note-v1",
+      "sha256": "a588d4507e6341bbf919adc4606fbf4faded6deb1a7ed726e641e92e3600132a"
+    },
+    {
+      "key": "rag",
+      "path": "../dense_v1/corpus/rag.md",
+      "source_uri": "https://arxiv.org/abs/2005.11401#agentic-rag-note-v1",
+      "sha256": "695fbc4fa1be69497d3a2fc954e029258e642c65d88276a125501e89e6eb1ad9"
+    },
+    {
+      "key": "speculative",
+      "path": "../dense_v1/corpus/speculative.md",
+      "source_uri": "https://arxiv.org/abs/2211.17192#agentic-rag-note-v1",
+      "sha256": "fcc0ae30b5a34cf1a2a2822f052cd7b5f23dfa383da3738ab5f2965e16fd71ec"
+    },
+    {
+      "key": "transformer",
+      "path": "../dense_v1/corpus/transformer.md",
+      "source_uri": "https://arxiv.org/abs/1706.03762#agentic-rag-note-v1",
+      "sha256": "cf22d245433268f8c7dd573417b53894cedce511f2882681bdc4fab30d8b184b"
+    },
+    {
+      "key": "rope",
+      "path": "../dense_v1/corpus/rope.md",
+      "source_uri": "https://arxiv.org/abs/2104.09864#agentic-rag-note-v1",
+      "sha256": "17b36f9b3e64c85066c75f6074365eb71f2610355ac5a3c21f88d7b59da20075"
+    }
+  ],
+  "questions": [
+    {
+      "id": "paged_en",
+      "language": "en",
+      "query": "How does PagedAttention store the KV cache?",
+      "answerable": true,
+      "reference_answer": "PagedAttention stores the KV cache in blocks that need not be contiguous in physical memory.",
+      "evidence": [
+        {
+          "document": "paged_attention",
+          "text": "PagedAttention stores the KV cache in blocks that need not occupy contiguous physical memory."
+        }
+      ]
+    },
+    {
+      "id": "paged_ru",
+      "language": "ru",
+      "query": "Как PagedAttention размещает KV cache в памяти?",
+      "answerable": true,
+      "reference_answer": "PagedAttention хранит KV cache блоками, которым не требуется непрерывное размещение в физической памяти.",
+      "evidence": [
+        {
+          "document": "paged_attention",
+          "text": "PagedAttention stores the KV cache in blocks that need not occupy contiguous physical memory."
+        }
+      ]
+    },
+    {
+      "id": "compare_en",
+      "language": "en",
+      "query": "Compare the base weights and trainable parameters in LoRA and QLoRA.",
+      "answerable": true,
+      "reference_answer": "LoRA freezes pretrained weights and trains low-rank weight updates. QLoRA trains low-rank adapters through a frozen base model stored in 4-bit precision.",
+      "evidence": [
+        {
+          "document": "lora",
+          "text": "LoRA freezes the pretrained weights and trains low-rank matrices for weight updates."
+        },
+        {
+          "document": "qlora",
+          "text": "QLoRA trains low-rank adapters through a frozen base model stored in 4-bit precision."
+        }
+      ]
+    },
+    {
+      "id": "compare_ru",
+      "language": "ru",
+      "query": "Сравни базовые веса и обучаемые параметры LoRA и QLoRA.",
+      "answerable": true,
+      "reference_answer": "LoRA замораживает предобученные веса и обучает низкоранговые обновления. QLoRA обучает низкоранговые адаптеры через замороженную базовую модель, хранящуюся в 4-битной точности.",
+      "evidence": [
+        {
+          "document": "lora",
+          "text": "LoRA freezes the pretrained weights and trains low-rank matrices for weight updates."
+        },
+        {
+          "document": "qlora",
+          "text": "QLoRA trains low-rank adapters through a frozen base model stored in 4-bit precision."
+        }
+      ]
+    },
+    {
+      "id": "spec_en",
+      "language": "en",
+      "query": "Which roles do the draft and target models play in speculative decoding?",
+      "answerable": true,
+      "reference_answer": "A small draft model proposes tokens and a larger target model verifies them.",
+      "evidence": [
+        {
+          "document": "speculative",
+          "text": "Speculative decoding lets a small draft model propose tokens that a larger target model verifies."
+        }
+      ]
+    },
+    {
+      "id": "spec_ru",
+      "language": "ru",
+      "query": "Какие роли выполняют draft и target модели в speculative decoding?",
+      "answerable": true,
+      "reference_answer": "Малая draft-модель предлагает токены, а более крупная target-модель проверяет их.",
+      "evidence": [
+        {
+          "document": "speculative",
+          "text": "Speculative decoding lets a small draft model propose tokens that a larger target model verifies."
+        }
+      ]
+    },
+    {
+      "id": "rag_en",
+      "language": "en",
+      "query": "What kinds of memory does RAG combine?",
+      "answerable": true,
+      "reference_answer": "RAG combines a parametric language model with non-parametric memory accessed through retrieval.",
+      "evidence": [
+        {
+          "document": "rag",
+          "text": "RAG combines a parametric language model with non-parametric memory accessed through retrieval."
+        }
+      ]
+    },
+    {
+      "id": "rag_ru",
+      "language": "ru",
+      "query": "Какие виды памяти сочетает RAG?",
+      "answerable": true,
+      "reference_answer": "RAG сочетает параметрическую языковую модель с непараметрической памятью, доступной через поиск.",
+      "evidence": [
+        {
+          "document": "rag",
+          "text": "RAG combines a parametric language model with non-parametric memory accessed through retrieval."
+        }
+      ]
+    },
+    {
+      "id": "absent_en",
+      "language": "en",
+      "query": "What exact tokens-per-second throughput does PagedAttention achieve on my laptop?",
+      "answerable": false,
+      "reference_answer": "The corpus provides no measured tokens-per-second throughput for the user's laptop; abstain.",
+      "evidence": []
+    },
+    {
+      "id": "absent_ru",
+      "language": "ru",
+      "query": "Какое точное значение learning rate использовали для QLoRA в моём эксперименте?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет сведений об эксперименте пользователя и его learning rate; нужен отказ.",
+      "evidence": []
+    }
+  ]
+}

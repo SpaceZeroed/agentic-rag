@@ -110,3 +110,50 @@ def test_usage_can_be_absent() -> None:
         transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)),
     ) as c:
         assert CompatibleLLM(c, "model").complete(MESSAGES, max_tokens=1).prompt_tokens is None
+
+
+def test_incomplete_completion_preserves_usage_without_reasoning_text() -> None:
+    from dataclasses import asdict
+
+    from agentic_rag.llm.base import IncompleteCompletionError
+
+    body = {
+        "model": "local-model",
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "reasoning_content": "private reasoning",
+                },
+                "finish_reason": "length",
+            }
+        ],
+        "usage": {"prompt_tokens": 50, "completion_tokens": 512, "cost": 0.123},
+    }
+    with (
+        httpx.Client(
+            base_url="http://local.test/v1/",
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, json=body)),
+        ) as c,
+        pytest.raises(IncompleteCompletionError) as caught,
+    ):
+        CompatibleLLM(c, "model").complete(MESSAGES, max_tokens=512)
+    completion = caught.value.completion
+    assert completion.finish_reason == "length"
+    assert completion.text == ""
+    assert completion.completion_tokens == 512
+    assert completion.provider_cost == 0.123
+    assert completion.reasoning_characters == len("private reasoning")
+    assert "private reasoning" not in json.dumps(asdict(completion))
+    assert "private reasoning" not in str(caught.value)
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_explicit_reasoning_option(enabled: bool) -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert json.loads(request.content)["reasoning"] == {"enabled": enabled}
+        return httpx.Response(200, json=response_body())
+
+    with httpx.Client(base_url="http://local.test/v1/", transport=httpx.MockTransport(handle)) as c:
+        CompatibleLLM(c, "model", reasoning_enabled=enabled).complete(MESSAGES, max_tokens=32)

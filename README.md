@@ -5,11 +5,12 @@ about ML papers and technical documentation using traceable evidence. The target
 system combines retrieval, cited generation, a single tool-using agent, evaluation,
 and local model inference.
 
-**Current status: Stage 5 — Basic RAG.** Markdown/TXT ingestion retains canonical
+**Current status: Stage 6 — RAG evaluation.** Markdown/TXT ingestion retains canonical
 revisions in PostgreSQL; dense/BM25/hybrid retrieval supports optional CPU reranking.
 `ask` builds a bounded context and returns a fake or compatible LLM answer with
-validated chunk citations. The default fake needs no inference server. Real answer
-quality, API endpoints and agents remain future milestones.
+validated chunk citations. The default fake needs no inference server. A versioned evaluation set measures
+retrieval/context and exports answers for human semantic review. A real Qwen/Haiku API comparison and explicitly labeled assistant review are available;
+independent human evaluation remains pending; API endpoints and agents are future milestones.
 
 See the Russian guides for [ingestion](docs/ingestion.md),
 [dense retrieval](docs/dense_retrieval.md) and [BM25/hybrid](docs/sparse_hybrid.md), including consistency, evaluation and
@@ -284,3 +285,33 @@ RAG_LLM_MAX_TOKENS separately limits generation. Valid citation IDs do not estab
 faithfulness; fake output is explicitly a test excerpt, not a generated answer.
 See the [Russian Stage 5 guide](docs/basic_rag.md) for architecture, failure behavior,
 server requirements and tests, and [ADR 0008](docs/adr/0008-basic-rag.md).
+
+## RAG evaluation (Stage 6)
+
+```bash
+uv run --locked --extra embeddings agentic-rag evaluate-rag \
+  benchmarks/rag_v1/dataset.json --mode bm25 --llm fake \
+  --output artifacts/rag_run.json
+uv run --locked --extra embeddings agentic-rag review-rag artifacts/rag_run.json \
+  --output artifacts/rag_review.json
+```
+
+The first command uses configured PostgreSQL and saves/reactivates the fixed dataset
+revisions. Dense/hybrid and optional reranking are also supported. Output paths must
+be new. Reports include every case, actual context, references, answers/errors and
+explicit metric denominators. References never enter the generator prompt.
+
+Ten authored development questions include EN/RU, two-document comparisons and
+unanswerable cases. Fake reports measure retrieval/context, **not answer quality**.
+For a real compatible server use `--llm compatible`, fill the exported human rubric,
+and run `review-rag REPORT --annotations REVIEW --output QUALITY`. Scoring rejects
+fake runs, incomplete annotations and reviews belonging to a different report.
+See [Stage 6 guide](docs/rag_evaluation.md), [ADR 0009](docs/adr/0009-rag-evaluation.md)
+and [measured results](docs/results.md).
+
+
+Current development selection: `qwen/qwen3.6-35b-a3b` through Rus-GPT with
+`RAG_LLM_REASONING_ENABLED=false`, output limit 4096. See the
+[controlled comparison](benchmarks/rag_v1/results/model_comparison_v1/README.md)
+for exact configurations, costs, observed failures and non-independent review limits.
+The reasoning switch is provider-specific and is omitted unless explicitly configured.

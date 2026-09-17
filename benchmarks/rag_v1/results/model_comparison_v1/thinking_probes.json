@@ -1,0 +1,57 @@
+[
+  {
+    "parameter": {
+      "chat_template_kwargs": {
+        "enable_thinking": false
+      }
+    },
+    "http_status": 200,
+    "max_tokens": 1024,
+    "model": "qwen/qwen3.6-35b-a3b",
+    "finish_reason": "length",
+    "content": null,
+    "reasoning_characters": 3684,
+    "usage": {
+      "prompt_tokens": 713,
+      "completion_tokens": 1024,
+      "total_tokens": 1737,
+      "cost": 0.13202
+    }
+  },
+  {
+    "parameter": {
+      "enable_thinking": false
+    },
+    "http_status": 200,
+    "max_tokens": 1024,
+    "model": "qwen/qwen3.6-35b-a3b",
+    "finish_reason": "length",
+    "content": null,
+    "reasoning_characters": 3813,
+    "usage": {
+      "prompt_tokens": 713,
+      "completion_tokens": 1024,
+      "total_tokens": 1737,
+      "cost": 0.13202
+    }
+  },
+  {
+    "parameter": {
+      "reasoning": {
+        "enabled": false
+      }
+    },
+    "http_status": 200,
+    "max_tokens": 1024,
+    "model": "qwen/qwen3.6-35b-a3b",
+    "finish_reason": "stop",
+    "content": "Сравнение базовых весов и обучаемых параметров LoRA и QLoRA на основе предоставленных источников:\n\n**Базовые веса:**\n*   **LoRA:** Предобученные веса замораживаются [C1]. Источник не указывает на использование квантования для базовой модели; метод не квантует замороженную базовую модель сам по себе [C1].\n*   **QLoRA:** Базовая модель хранится в замороженном состоянии с точностью 4-бит [C2].\n\n**Обучаемые параметры:**\n*   **LoRA:** Обучаются низкоранговые матрицы для обновления весов (произведение BA), где ранг определяет количество обучаемых параметров [C1].\n*   **QLoRA:** Обучаются низкоранговые адаптеры, аналогично LoRA, но через замороженную 4-битную базовую модель [C2].\n\nТаким образом, ключевое различие заключается в представлении базовых весов: в LoRA они хранятся в исходной точности (не квантованы), тогда как в QLoRA они хранятся в 4-битной точности [C1][C2]. Обучаемые параметры в обоих случаях представляют собой низкоранговые адаптеры, добавляемые к замороженной базовой модели [C1][C2].",
+    "reasoning_characters": 0,
+    "usage": {
+      "prompt_tokens": 715,
+      "completion_tokens": 301,
+      "total_tokens": 1016,
+      "cost": 0.048915
+    }
+  }
+]

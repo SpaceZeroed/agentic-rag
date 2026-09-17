@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "report_sha256": "e04e06553478b60845c6ea5ee6d483922c53f6019e3f703a6c85c5a27350869f",
+  "reviewer": "Codex assistant; same assistant authored dataset; not independent human review",
+  "review_method": "assistant",
+  "cases": [
+    {
+      "id": "paged_en",
+      "correctness": 2,
+      "rationale": "Ответ передаёт необходимые факты эталона и не противоречит переданному контексту.",
+      "claims": [
+        {
+          "text": "PagedAttention stores the KV cache in blocks that do not need to occupy contiguous physical memory",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "It utilizes a block table to map logical token blocks to physical cache blocks",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "which helps reduce wasted reservation and fragmentation when handling requests of varying lengths",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "the cache specifically stores attention keys and values rather than all model weights",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "and these blocks can be shared across related sequences",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        }
+      ]
+    },
+    {
+      "id": "paged_ru",
+      "correctness": 2,
+      "rationale": "Ответ передаёт необходимые факты эталона и не противоречит переданному контексту.",
+      "claims": [
+        {
+          "text": "PagedAttention хранит KV cache в блоках, которые не обязаны занимать непрерывную физическую память",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "Для управления размещением используется таблица блоков, отображающая логические блоки токенов на физические блоки кэша",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "Такой подход уменьшает потери памяти и фрагментацию при обслуживании запросов разной длины",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "а также позволяет разделять блоки между связанными последовательностями",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "При этом в кэше сохраняются только ключи и значения внимания, а не все веса модели",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        }
+      ]
+    },
+    {
+      "id": "compare_en",
+      "correctness": 2,
+      "rationale": "Ответ передаёт необходимые факты эталона и не противоречит переданному контексту.",
+      "claims": [
+        {
+          "text": "Both methods freeze the pretrained base model",
+          "verdict": "supported",
+          "rationale": "C1 (LoRA) и C2 (QLoRA): замороженные веса, low-rank обновления/адаптеры и 4-bit база QLoRA. Синтез двух источников допускается; отсутствие квантования относится к описанному базовому методу, не запрещает его внешнее сочетание с квантованием."
+        },
+        {
+          "text": "and train low-rank matrices (represented as a product BA) to handle weight updates.",
+          "verdict": "supported",
+          "rationale": "C1 (LoRA) и C2 (QLoRA): замороженные веса, low-rank обновления/адаптеры и 4-bit база QLoRA. Синтез двух источников допускается; отсутствие квантования относится к описанному базовому методу, не запрещает его внешнее сочетание с квантованием."
+        },
+        {
+          "text": "The rank of these matrices controls the number of trainable parameters in both cases",
+          "verdict": "supported",
+          "rationale": "C1 (LoRA) и C2 (QLoRA): замороженные веса, low-rank обновления/адаптеры и 4-bit база QLoRA. Синтез двух источников допускается; отсутствие квантования относится к описанному базовому методу, не запрещает его внешнее сочетание с квантованием."
+        },
+        {
+          "text": "QLoRA specifically trains these low-rank adapters through its frozen base model",
+          "verdict": "supported",
+          "rationale": "C1 (LoRA) и C2 (QLoRA): замороженные веса, low-rank обновления/адаптеры и 4-bit база QLoRA. Синтез двух источников допускается; отсутствие квантования относится к описанному базовому методу, не запрещает его внешнее сочетание с квантованием."
+        },
+        {
+          "text": "LoRA freezes the pretrained weights without quantizing them",
+          "verdict": "supported",
+          "rationale": "C1 (LoRA) и C2 (QLoRA): замороженные веса, low-rank обновления/адаптеры и 4-bit база QLoRA. Синтез двух источников допускается; отсутствие квантования относится к описанному базовому методу, не запрещает его внешнее сочетание с квантованием."
+        },
+        {
+          "text": "QLoRA stores its frozen base model in 4-bit precision to target fine-tuning memory constraints",
+          "verdict": "supported",
+          "rationale": "C1 (LoRA) и C2 (QLoRA): замороженные веса, low-rank обновления/адаптеры и 4-bit база QLoRA. Синтез двух источников допускается; отсутствие квантования относится к описанному базовому методу, не запрещает его внешнее сочетание с квантованием."
+        },
+        {
+          "text": "though this four-bit storage does not mean every training operation uses four-bit arithmetic",
+          "verdict": "supported",
+          "rationale": "C1 (LoRA) и C2 (QLoRA): замороженные веса, low-rank обновления/адаптеры и 4-bit база QLoRA. Синтез двух источников допускается; отсутствие квантования относится к описанному базовому методу, не запрещает его внешнее сочетание с квантованием."
+        }
+      ]
+    },
+    {
+      "id": "spec_en",
+      "correctness": 2,
+      "rationale": "Ответ передаёт необходимые факты эталона и не противоречит переданному контексту.",
+      "claims": [
+        {
+          "text": "the draft model proposes tokens",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "and the target model verifies them",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        }
+      ]
+    },
+    {
+      "id": "spec_ru",
+      "correctness": 2,
+      "rationale": "Ответ передаёт необходимые факты эталона и не противоречит переданному контексту.",
+      "claims": [
+        {
+          "text": "маленькая модель-черновик (draft model) предлагает токены",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        },
+        {
+          "text": "а большая целевая модель (target model) их проверяет",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        }
+      ]
+    },
+    {
+      "id": "rag_en",
+      "correctness": 2,
+      "rationale": "Ответ передаёт необходимые факты эталона и не противоречит переданному контексту.",
+      "claims": [
+        {
+          "text": "RAG combines parametric memory (from a language model) with non-parametric memory accessed through retrieval",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        }
+      ]
+    },
+    {
+      "id": "rag_ru",
+      "correctness": 2,
+      "rationale": "Ответ передаёт необходимые факты эталона и не противоречит переданному контексту.",
+      "claims": [
+        {
+          "text": "RAG сочетает параметрическую память (языковой модели) и непараметрическую память, доступную через механизм поиска",
+          "verdict": "supported",
+          "rationale": "C1 прямо поддерживает утверждение; допускается смысловое перефразирование."
+        }
+      ]
+    },
+    {
+      "id": "absent_en",
+      "correctness": 2,
+      "rationale": "Верно признаёт отсутствие запрошенных сведений. Формат sentinel оценивается отдельно от смысла отказа.",
+      "claims": []
+    },
+    {
+      "id": "absent_ru",
+      "correctness": 2,
+      "rationale": "Верно признаёт отсутствие запрошенных сведений. Формат sentinel оценивается отдельно от смысла отказа.",
+      "claims": []
+    }
+  ]
+}

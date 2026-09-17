@@ -1,0 +1,61 @@
+{
+  "report_sha256": "ca9e7c0fde7c26338aac6b8c272865fa1999b432b3d66c378fbd0f60f447840a",
+  "reviewer": "Codex assistant; same assistant authored dataset; not independent human review",
+  "review_method": "assistant",
+  "case_count": 10,
+  "reviewed_count": 9,
+  "errors": 1,
+  "correctness_all_cases_errors_zero": 0.9,
+  "abstention_accuracy_all_cases_errors_zero": 0.8,
+  "claim_count": 50,
+  "faithfulness_micro": 0.98,
+  "unsupported_claim_rate": 0.02,
+  "contradiction_rate": 0.0,
+  "cases": [
+    {
+      "id": "paged_en",
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "paged_ru",
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "compare_en",
+      "correctness": 1.0,
+      "faithfulness": 0.9333333333333333
+    },
+    {
+      "id": "compare_ru",
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "spec_en",
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "spec_ru",
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "rag_en",
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "rag_ru",
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    },
+    {
+      "id": "absent_en",
+      "correctness": 1.0,
+      "faithfulness": 1.0
+    }
+  ]
+}

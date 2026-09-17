@@ -6,7 +6,7 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from agentic_rag.llm.base import Completion, LLMError, Message
+from agentic_rag.llm.base import Completion, IncompleteCompletionError, LLMError, Message
 
 
 class _WireModel(BaseModel):
@@ -15,7 +15,9 @@ class _WireModel(BaseModel):
 
 class _Message(_WireModel):
     role: Literal["assistant"]
-    content: str
+    content: str | None
+    reasoning: str | None = None
+    reasoning_content: str | None = None
 
 
 class _Choice(_WireModel):
@@ -26,6 +28,7 @@ class _Choice(_WireModel):
 class _Usage(_WireModel):
     prompt_tokens: int = Field(ge=0)
     completion_tokens: int = Field(ge=0)
+    cost: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
 class _Response(_WireModel):
@@ -37,11 +40,14 @@ class _Response(_WireModel):
 class CompatibleLLM:
     """Caller owns the HTTP client lifecycle; no retries or silent fake fallback."""
 
-    def __init__(self, client: httpx.Client, model: str) -> None:
+    def __init__(
+        self, client: httpx.Client, model: str, *, reasoning_enabled: bool | None = None
+    ) -> None:
         if not model.strip():
             raise ValueError("LLM model is required")
         self.client = client
         self.model = model
+        self.reasoning_enabled = reasoning_enabled
 
     def complete(self, messages: tuple[Message, ...], *, max_tokens: int) -> Completion:
         if not messages or max_tokens < 1:
@@ -55,6 +61,11 @@ class CompatibleLLM:
                     "max_tokens": max_tokens,
                     "temperature": 0,
                     "stream": False,
+                    **(
+                        {"reasoning": {"enabled": self.reasoning_enabled}}
+                        if self.reasoning_enabled is not None
+                        else {}
+                    ),
                 },
             )
             response.raise_for_status()
@@ -62,12 +73,15 @@ class CompatibleLLM:
         except (httpx.HTTPError, ValidationError, ValueError) as exc:
             raise LLMError("LLM transport or response failure") from exc
         choice = result.choices[0]
-        if choice.finish_reason != "stop" or not choice.message.content.strip():
-            raise LLMError("LLM did not return a complete text answer")
-        return Completion(
-            choice.message.content,
+        completion = Completion(
+            choice.message.content or "",
             result.model,
             choice.finish_reason,
             result.usage.prompt_tokens if result.usage else None,
             result.usage.completion_tokens if result.usage else None,
+            result.usage.cost if result.usage else None,
+            len(choice.message.reasoning_content or choice.message.reasoning or ""),
         )
+        if choice.finish_reason != "stop" or not completion.text.strip():
+            raise IncompleteCompletionError(completion)
+        return completion

@@ -1,0 +1,156 @@
+{
+  "dataset_sha256": "9113c1442d707978e7b3e22f2aa53de15c3304e21a2d4d734b0acde90f102e0b",
+  "same_context_and_messages": true,
+  "assessment_method": "Codex assistant; not independent human review",
+  "runs": {
+    "qwen": {
+      "report_sha256": "3de83a1fc7fa67c30b747d701014ac21b17b9b3fac5a42c0a66886979a8ecb0c",
+      "model": "qwen/qwen3.6-35b-a3b",
+      "errors": 0,
+      "median_generation_seconds": 1.0613482230110094,
+      "prompt_tokens": 11002,
+      "completion_tokens": 742,
+      "provider_cost_rub": 0.30537,
+      "returned_reasoning_characters": 0,
+      "structured_abstentions": 2,
+      "assistant_scores": {
+        "report_sha256": "3de83a1fc7fa67c30b747d701014ac21b17b9b3fac5a42c0a66886979a8ecb0c",
+        "reviewer": "Codex assistant; same assistant authored dataset; not independent human review",
+        "review_method": "assistant",
+        "case_count": 10,
+        "reviewed_count": 10,
+        "errors": 0,
+        "correctness_all_cases_errors_zero": 1.0,
+        "abstention_accuracy_all_cases_errors_zero": 1.0,
+        "claim_count": 31,
+        "faithfulness_micro": 1.0,
+        "unsupported_claim_rate": 0.0,
+        "contradiction_rate": 0.0,
+        "cases": [
+          {
+            "id": "paged_en",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "paged_ru",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "compare_en",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "compare_ru",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "spec_en",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "spec_ru",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "rag_en",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "rag_ru",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "absent_en",
+            "correctness": 1.0,
+            "faithfulness": null
+          },
+          {
+            "id": "absent_ru",
+            "correctness": 1.0,
+            "faithfulness": null
+          }
+        ]
+      }
+    },
+    "haiku": {
+      "report_sha256": "ca9e7c0fde7c26338aac6b8c272865fa1999b432b3d66c378fbd0f60f447840a",
+      "model": "anthropic/claude-haiku-4.5",
+      "errors": 1,
+      "median_generation_seconds": 2.104456499495427,
+      "prompt_tokens": 10482,
+      "completion_tokens": 1421,
+      "provider_cost_rub": 1.7587,
+      "returned_reasoning_characters": 0,
+      "structured_abstentions": 0,
+      "assistant_scores": {
+        "report_sha256": "ca9e7c0fde7c26338aac6b8c272865fa1999b432b3d66c378fbd0f60f447840a",
+        "reviewer": "Codex assistant; same assistant authored dataset; not independent human review",
+        "review_method": "assistant",
+        "case_count": 10,
+        "reviewed_count": 9,
+        "errors": 1,
+        "correctness_all_cases_errors_zero": 0.9,
+        "abstention_accuracy_all_cases_errors_zero": 0.8,
+        "claim_count": 50,
+        "faithfulness_micro": 0.98,
+        "unsupported_claim_rate": 0.02,
+        "contradiction_rate": 0.0,
+        "cases": [
+          {
+            "id": "paged_en",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "paged_ru",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "compare_en",
+            "correctness": 1.0,
+            "faithfulness": 0.9333333333333333
+          },
+          {
+            "id": "compare_ru",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "spec_en",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "spec_ru",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "rag_en",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "rag_ru",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          },
+          {
+            "id": "absent_en",
+            "correctness": 1.0,
+            "faithfulness": 1.0
+          }
+        ]
+      }
+    }
+  }
+}

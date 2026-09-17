@@ -44,6 +44,7 @@ class Settings(BaseSettings):
 
     llm_base_url: str = "http://127.0.0.1:8000/v1"
     llm_model: str | None = None
+    llm_reasoning_enabled: bool | None = None
     llm_api_key: SecretStr | None = None
     llm_timeout_seconds: float = Field(default=60, gt=0, allow_inf_nan=False)
     llm_max_prompt_bytes: int = Field(default=24000, ge=1)

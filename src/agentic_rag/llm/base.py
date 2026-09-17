@@ -19,6 +19,16 @@ class Completion:
     finish_reason: str
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    provider_cost: float | None = None
+    reasoning_characters: int | None = None
+
+
+class IncompleteCompletionError(LLMError):
+    """Retain safe accounting/finish metadata without accepting a partial answer."""
+
+    def __init__(self, completion: Completion) -> None:
+        super().__init__("LLM did not return a complete text answer")
+        self.completion = completion
 
 
 class LLM(Protocol):

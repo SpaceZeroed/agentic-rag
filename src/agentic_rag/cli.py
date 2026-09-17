@@ -3,7 +3,8 @@
 import argparse
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import ExitStack, contextmanager
 from dataclasses import asdict
 from pathlib import Path
 from uuid import UUID
@@ -21,7 +22,7 @@ from agentic_rag.embeddings.e5 import E5EmbeddingProvider
 from agentic_rag.ingestion.models import ChunkingConfig
 from agentic_rag.ingestion.parsing import DocumentInputError
 from agentic_rag.ingestion.service import prepare_document
-from agentic_rag.llm.base import LLMError
+from agentic_rag.llm.base import LLM, LLMError
 from agentic_rag.llm.compatible import CompatibleLLM
 from agentic_rag.llm.fake import FakeLLM
 from agentic_rag.rag.service import answer
@@ -31,7 +32,7 @@ from agentic_rag.retrieval.hybrid import HybridRetriever
 from agentic_rag.retrieval.models import SearchFilter, SearchHit
 from agentic_rag.retrieval.qdrant import QdrantVectorIndex
 from agentic_rag.retrieval.service import DenseRetriever
-from agentic_rag.retrieval.sparse import SparseRetriever
+from agentic_rag.retrieval.sparse import TOKENIZER_VERSION, BM25Config, SparseRetriever
 from agentic_rag.storage.database import create_database_engine, upgrade_database
 from agentic_rag.storage.repository import PostgresDocumentRepository
 from agentic_rag.storage.retrieval import PostgresIndexCatalog
@@ -83,6 +84,22 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--approximate", action="store_true")
         if name == "ask":
             command.add_argument("--llm", choices=["fake", "compatible"], default="fake")
+    evaluation = commands.add_parser(
+        "evaluate-rag", help="Evaluate retrieval/context and export answers"
+    )
+    evaluation.add_argument("dataset", type=Path)
+    evaluation.add_argument("--output", type=Path, required=True)
+    evaluation.add_argument("--mode", choices=["dense", "bm25", "hybrid"], default="bm25")
+    evaluation.add_argument("--llm", choices=["fake", "compatible"], default="fake")
+    evaluation.add_argument("--k", type=int, default=5)
+    evaluation.add_argument("--candidate-k", type=int, default=20)
+    evaluation.add_argument("--rerank", action="store_true")
+    evaluation.add_argument("--rerank-k", type=int, default=20)
+    evaluation.add_argument("--collection-prefix")
+    review = commands.add_parser("review-rag", help="Export a review template or score annotations")
+    review.add_argument("report", type=Path)
+    review.add_argument("--annotations", type=Path)
+    review.add_argument("--output", type=Path, required=True)
     show = commands.add_parser("show", help="Read a stored document and its chunks as JSON")
     show.add_argument("document_id", type=UUID)
     show.add_argument(
@@ -92,6 +109,22 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _execute(args: argparse.Namespace, settings: Settings) -> int:
+    if args.command == "review-rag":
+        from agentic_rag.evaluation.rag_review import Review, review_template, score_review
+
+        report = json.loads(args.report.read_text(encoding="utf-8"))
+        review_result = (
+            score_review(
+                report, Review.model_validate_json(args.annotations.read_text(encoding="utf-8"))
+            )
+            if args.annotations
+            else review_template(report)
+        )
+        _write_new_json(args.output, review_result)
+        print(json.dumps({"output": str(args.output)}))
+        return 0
+    if args.command == "evaluate-rag":
+        return _evaluate_rag(args, settings)
     if args.command == "model-check":
         model = _load_embeddings(settings)
         vector = model.embed_query("embedding model check")
@@ -320,34 +353,156 @@ def _print_search(
     if collection is not None:
         payload["collection"] = collection
     if args.command == "ask":
-        if args.llm == "fake":
+        with _generation_provider(args.llm, settings) as llm:
             result = answer(
                 args.query,
                 hits,
-                FakeLLM(),
+                llm,
                 max_prompt_bytes=settings.llm_max_prompt_bytes,
                 max_tokens=settings.llm_max_tokens,
             )
-        else:
-            headers = {}
-            if settings.llm_api_key:
-                headers["Authorization"] = f"Bearer {settings.llm_api_key.get_secret_value()}"
-            with httpx.Client(
-                base_url=settings.llm_base_url.rstrip("/") + "/",
-                headers=headers,
-                timeout=settings.llm_timeout_seconds,
-                follow_redirects=False,
-                trust_env=False,
-            ) as client:
-                result = answer(
-                    args.query,
-                    hits,
-                    CompatibleLLM(client, settings.llm_model or ""),
-                    max_prompt_bytes=settings.llm_max_prompt_bytes,
-                    max_tokens=settings.llm_max_tokens,
-                )
         payload["llm_provider"] = args.llm
         payload["answer"] = asdict(result)
     else:
         payload["hits"] = [asdict(hit) for hit in hits]
     print(json.dumps(payload, ensure_ascii=False, default=str))
+
+
+@contextmanager
+def _generation_provider(provider: str, settings: Settings) -> Iterator[LLM]:
+    if provider == "fake":
+        yield FakeLLM()
+        return
+    if not settings.llm_model or not settings.llm_model.strip():
+        raise ValueError("Set RAG_LLM_MODEL for compatible generation")
+    headers = {}
+    if settings.llm_api_key:
+        headers["Authorization"] = f"Bearer {settings.llm_api_key.get_secret_value()}"
+    with httpx.Client(
+        base_url=settings.llm_base_url.rstrip("/") + "/",
+        headers=headers,
+        timeout=settings.llm_timeout_seconds,
+        follow_redirects=False,
+        trust_env=False,
+    ) as client:
+        yield CompatibleLLM(
+            client, settings.llm_model, reasoning_enabled=settings.llm_reasoning_enabled
+        )
+
+
+def _write_new_json(path: Path, report: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("x", encoding="utf-8") as output:
+        output.write(json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\n")
+
+
+def _evaluate_rag(args: argparse.Namespace, settings: Settings) -> int:
+    from agentic_rag.evaluation.rag_dataset import load_rag_dataset
+    from agentic_rag.evaluation.rag_runner import run_rag_evaluation
+
+    if args.output.exists():
+        raise ValueError("Output already exists; choose a new report path")
+    if not 1 <= args.k <= 100 or not args.k <= args.candidate_k <= 100:
+        raise ValueError("Require 1 <= k <= candidate-k <= 100")
+    if not 1 <= args.rerank_k <= 100 or (args.rerank and args.rerank_k < args.k):
+        raise ValueError("Invalid rerank-k")
+    if args.rerank and args.mode == "hybrid" and args.rerank_k > args.candidate_k:
+        raise ValueError("Hybrid candidate-k must cover rerank-k")
+    if args.mode == "bm25" and args.collection_prefix:
+        raise ValueError("BM25 does not use a vector collection")
+    dataset, documents = load_rag_dataset(args.dataset)
+    if settings.database_url is None:
+        raise ValueError("RAG_DATABASE_URL required")
+    with ExitStack() as stack:
+        llm = stack.enter_context(_generation_provider(args.llm, settings))
+        engine = create_database_engine(settings.database_url.get_secret_value())
+        stack.callback(engine.dispose)
+        catalog = PostgresIndexCatalog(engine)
+        writer = PostgresDocumentRepository(engine)
+        for document in documents.values():
+            writer.save(document)
+        filters = SearchFilter(tuple(d.document_id for d in documents.values()))
+        config: dict[str, object] = {
+            "mode": args.mode,
+            "bm25": asdict(BM25Config()),
+            "tokenizer": TOKENIZER_VERSION,
+            "rrf_rank_constant": 60,
+            "exact_search": True,
+            "candidate_k": args.candidate_k,
+            "rerank_k": args.rerank_k,
+            "llm_model": settings.llm_model if args.llm == "compatible" else "fake-extractive-v1",
+            "llm_timeout_seconds": settings.llm_timeout_seconds,
+            "temperature": 0,
+            "reasoning_enabled_requested": settings.llm_reasoning_enabled,
+            "chunking": {"max_chars": dataset.max_chars, "overlap": dataset.overlap},
+        }
+        dense = None
+        collection = None
+        if args.mode != "bm25":
+            embeddings = _load_embeddings(settings)
+            client = QdrantClient(
+                url=settings.qdrant_url,
+                api_key=settings.qdrant_api_key.get_secret_value()
+                if settings.qdrant_api_key
+                else None,
+                timeout=30,
+            )
+            stack.callback(client.close)
+            index = QdrantVectorIndex(
+                client, embeddings.spec, args.collection_prefix or settings.collection_prefix
+            )
+            collection = index.collection
+            dense = DenseRetriever(embeddings, index, catalog)
+            dense.sync(filters)
+            config.update({"embeddings": asdict(embeddings.spec), "collection": collection})
+        ranking = _load_reranker(settings) if args.rerank else None
+        config["reranker"] = asdict(ranking.spec) if ranking else None
+
+        def check_revisions() -> None:
+            actual = (
+                {d.revision_id for d in catalog.current_documents(filters)}
+                if collection is None
+                else set(catalog.searchable_revisions(collection, filters))
+            )
+            if actual != {d.revision_id for d in documents.values()}:
+                raise RuntimeError("Evaluation dataset changed or is not fully indexed")
+
+        def search(query: str) -> list[SearchHit]:
+            check_revisions()
+            count = args.rerank_k if ranking else args.k
+            if dense is None:
+                hits = SparseRetriever(catalog).search(query, k=count, filters=filters)
+            else:
+                retriever = (
+                    HybridRetriever(dense, candidate_k=args.candidate_k)
+                    if args.mode == "hybrid"
+                    else dense
+                )
+                hits = retriever.search(query, k=count, filters=filters, exact=True)
+            if ranking:
+                hits = list(rerank(query, hits, ranking, catalog, collection, k=args.k))
+            return hits
+
+        check_revisions()
+        report = run_rag_evaluation(
+            args.dataset,
+            search,
+            llm,
+            provider=args.llm,
+            config=config,
+            k=args.k,
+            max_prompt_bytes=settings.llm_max_prompt_bytes,
+            max_tokens=settings.llm_max_tokens,
+        )
+        check_revisions()
+        _write_new_json(args.output, report)
+        print(
+            json.dumps(
+                {
+                    "output": str(args.output),
+                    "metrics": report["metrics"],
+                    "errors": report["errors"],
+                }
+            )
+        )
+        return 0
