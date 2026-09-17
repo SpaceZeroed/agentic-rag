@@ -13,6 +13,7 @@ from agentic_rag.storage.database import create_database_engine, upgrade_databas
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption("--reranker-cache", help="Existing reranker cache for offline CPU test")
     parser.addoption("--qdrant-url", help="Real Qdrant URL; tests create unique collections")
     parser.addoption("--model-cache", help="Existing E5 cache for optional offline CPU model test")
     parser.addoption(

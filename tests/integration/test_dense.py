@@ -220,3 +220,60 @@ def test_sparse_cli_needs_neither_model_nor_qdrant(
     monkeypatch.setenv("RAG_EMBEDDING_MODEL", "does-not-exist")
     assert main(["search", "alpha", "--mode", "bm25"]) == 0
     assert len(json.loads(capsys.readouterr().out)["hits"]) == 1
+
+
+def test_reranking_rechecks_revision_after_scoring(database: Engine, tmp_path: Path) -> None:
+    from agentic_rag.reranking.base import RerankingSpec
+    from agentic_rag.reranking.service import rerank
+    from agentic_rag.retrieval.sparse import SparseRetriever
+
+    repo = PostgresDocumentRepository(database)
+    old = document(tmp_path, "alpha")
+    repo.save(old)
+    catalog = PostgresIndexCatalog(database)
+    hits = SparseRetriever(catalog).search("alpha")
+    assert hits
+    new = document(tmp_path, "beta")
+
+    class SwitchingProvider:
+        spec = RerankingSpec("fake", "a" * 40)
+
+        def score(self, query: str, passages: Sequence[str]) -> list[float]:
+            repo.save(new)
+            return [10.0] * len(passages)
+
+    assert rerank("alpha", hits, SwitchingProvider(), catalog, None) == []
+
+
+def test_bm25_rerank_cli(
+    database: Engine,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import json
+    from typing import cast
+
+    from agentic_rag import cli
+    from agentic_rag.core.config import Settings
+    from agentic_rag.reranking.base import RerankingSpec
+    from agentic_rag.reranking.cross_encoder import CrossEncoderProvider
+
+    class Provider:
+        spec = RerankingSpec("fake", "a" * 40)
+
+        def score(self, query: str, passages: Sequence[str]) -> list[float]:
+            return [42.0] * len(passages)
+
+    def load(settings: Settings) -> CrossEncoderProvider:
+        return cast(CrossEncoderProvider, Provider())
+
+    repo = PostgresDocumentRepository(database)
+    repo.save(document(tmp_path, "alpha"))
+    monkeypatch.setattr(cli, "_load_reranker", load)
+    monkeypatch.setenv("RAG_DATABASE_URL", database.url.render_as_string(hide_password=False))
+    assert cli.main(["search", "alpha", "--mode", "bm25", "--rerank", "--k", "1"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["reranked"] is True
+    assert report["hits"][0]["score"] == 42.0
+    assert report["hits"][0]["retrieval_rank"] == 1

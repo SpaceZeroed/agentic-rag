@@ -20,6 +20,8 @@ from agentic_rag.embeddings.e5 import E5EmbeddingProvider
 from agentic_rag.ingestion.models import ChunkingConfig
 from agentic_rag.ingestion.parsing import DocumentInputError
 from agentic_rag.ingestion.service import prepare_document
+from agentic_rag.reranking.cross_encoder import CrossEncoderProvider
+from agentic_rag.reranking.service import rerank
 from agentic_rag.retrieval.hybrid import HybridRetriever
 from agentic_rag.retrieval.models import SearchFilter
 from agentic_rag.retrieval.qdrant import QdrantVectorIndex
@@ -48,6 +50,16 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("index", "search", "evaluate"):
         command = commands.add_parser(name, help=f"{name.capitalize()} dense retrieval")
         command.add_argument("--collection-prefix")
+        if name in {"search", "evaluate"}:
+            command.add_argument(
+                "--rerank", action="store_true", help="Score retrieved pairs with CPU cross-encoder"
+            )
+            command.add_argument(
+                "--rerank-k",
+                type=int,
+                default=20,
+                help="Candidate budget for reranking (default: 20)",
+            )
         if name == "evaluate":
             command.add_argument("dataset", type=Path)
             command.add_argument("--output", type=Path, required=True)
@@ -86,6 +98,18 @@ def _execute(args: argparse.Namespace, settings: Settings) -> int:
             )
         )
         return 0
+    if args.command in {"search", "evaluate"}:
+        if not 1 <= args.rerank_k <= 100:
+            raise ValueError("rerank-k must be 1..100")
+        if args.rerank and args.rerank_k < (args.k if args.command == "search" else 5):
+            raise ValueError("rerank-k must cover final k")
+    if args.command == "search":
+        if not args.query.strip() or not 1 <= args.k <= 100:
+            raise ValueError("Query must be nonempty; k must be 1..100")
+        if args.rerank and args.mode == "hybrid" and args.rerank_k > args.candidate_k:
+            raise ValueError("Hybrid candidate-k must cover rerank-k")
+    if args.command == "evaluate" and args.rerank and args.compare:
+        raise ValueError("Use --compare or --rerank, not both")
     prepared = None
     if args.command in {"preview", "ingest"}:
         prepared = prepare_document(
@@ -106,12 +130,27 @@ def _execute(args: argparse.Namespace, settings: Settings) -> int:
                 raise ValueError("BM25 does not use an approximate index or vector collection")
             hits = SparseRetriever(PostgresIndexCatalog(engine)).search(
                 args.query,
-                k=args.k,
+                k=args.rerank_k if args.rerank else args.k,
                 filters=SearchFilter(tuple(args.document_id), args.source_uri, args.media_type),
             )
+            if args.rerank and hits:
+                hits = list(
+                    rerank(
+                        args.query,
+                        hits,
+                        _load_reranker(settings),
+                        PostgresIndexCatalog(engine),
+                        None,
+                        k=args.k,
+                    )
+                )
             print(
                 json.dumps(
-                    {"mode": "bm25", "hits": [asdict(hit) for hit in hits]},
+                    {
+                        "reranked": args.rerank,
+                        "mode": "bm25",
+                        "hits": [asdict(hit) for hit in hits],
+                    },
                     ensure_ascii=False,
                     default=str,
                 )
@@ -132,10 +171,19 @@ def _execute(args: argparse.Namespace, settings: Settings) -> int:
                 )
                 retriever = DenseRetriever(model, index, PostgresIndexCatalog(engine))
                 if args.command == "evaluate":
-                    from agentic_rag.evaluation.runner import compare, evaluate
+                    from agentic_rag.evaluation.runner import compare, compare_reranking, evaluate
 
-                    run = compare if args.compare else evaluate
-                    report = run(args.dataset, retriever, PostgresDocumentRepository(engine))
+                    if args.rerank:
+                        report = compare_reranking(
+                            args.dataset,
+                            retriever,
+                            PostgresDocumentRepository(engine),
+                            _load_reranker(settings),
+                            candidate_k=args.rerank_k,
+                        )
+                    else:
+                        run = compare if args.compare else evaluate
+                        report = run(args.dataset, retriever, PostgresDocumentRepository(engine))
                     args.output.parent.mkdir(parents=True, exist_ok=True)
                     args.output.write_text(
                         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -154,13 +202,28 @@ def _execute(args: argparse.Namespace, settings: Settings) -> int:
                             else retriever
                         )
                         hits = searcher.search(
-                            args.query, k=args.k, filters=filters, exact=not args.approximate
+                            args.query,
+                            k=args.rerank_k if args.rerank else args.k,
+                            filters=filters,
+                            exact=not args.approximate,
                         )
+                        if args.rerank and hits:
+                            hits = list(
+                                rerank(
+                                    args.query,
+                                    hits,
+                                    _load_reranker(settings),
+                                    retriever.catalog,
+                                    index.collection,
+                                    k=args.k,
+                                )
+                            )
                         print(
                             json.dumps(
                                 {
                                     "collection": index.collection,
                                     "mode": args.mode,
+                                    "reranked": args.rerank,
                                     "hits": [asdict(hit) for hit in hits],
                                 },
                                 ensure_ascii=False,
@@ -241,5 +304,16 @@ def _load_embeddings(settings: Settings) -> E5EmbeddingProvider:
         revision=settings.embedding_revision,
         batch_size=settings.embedding_batch_size,
         threads=settings.embedding_threads,
+        local_files_only=settings.model_local_files_only,
+    )
+
+
+def _load_reranker(settings: Settings) -> CrossEncoderProvider:
+    return CrossEncoderProvider(
+        settings.data_dir / "models",
+        model_id=settings.reranking_model,
+        revision=settings.reranking_revision,
+        batch_size=settings.reranking_batch_size,
+        threads=settings.reranking_threads,
         local_files_only=settings.model_local_files_only,
     )

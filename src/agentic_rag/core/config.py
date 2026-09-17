@@ -37,3 +37,7 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 8
     embedding_threads: int = 4
     model_local_files_only: bool = False
+    reranking_model: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+    reranking_revision: str = "1427fd652930e4ba29e8149678df786c240d8825"
+    reranking_batch_size: int = 4
+    reranking_threads: int = 4

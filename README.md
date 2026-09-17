@@ -248,3 +248,11 @@ Stages 0–3 are implemented. The next stage, after review, is cross-encoder rer
 To continue in a new chat, read the [conversation handoff](docs/handoff.md) and
 the [original project brief](docs/project_brief.md). They preserve the working
 style, completed work, verification results, limitations, and stopping point.
+
+## Stage 4: optional CPU reranking
+
+`search --mode hybrid --rerank --candidate-k 20 --rerank-k 20 --k 5` adds a pinned
+multilingual cross-encoder after retrieval. `evaluate DATASET --rerank --output PATH`
+compares the same hybrid candidates before/after reranking. Use the existing
+`--extra embeddings`; models run locally on CPU. See [architecture, model choice,
+commands and limits](docs/reranking.md) and [measurements](docs/results.md).

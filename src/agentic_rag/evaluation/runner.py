@@ -15,6 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from agentic_rag.evaluation.metrics import retrieval_metrics
 from agentic_rag.ingestion.models import ChunkingConfig, DocumentWriter, PreparedDocument
 from agentic_rag.ingestion.service import prepare_document
+from agentic_rag.reranking.base import RerankingProvider
+from agentic_rag.reranking.service import rerank
 from agentic_rag.retrieval.hybrid import HybridRetriever
 from agentic_rag.retrieval.models import SearchFilter
 from agentic_rag.retrieval.service import DenseRetriever
@@ -97,7 +99,11 @@ def evaluate(
     writer: DocumentWriter,
     *,
     mode: Literal["dense", "bm25", "hybrid"] = "dense",
+    reranker: RerankingProvider | None = None,
+    candidate_k: int = 20,
 ) -> dict[str, object]:
+    if reranker is not None and (mode != "hybrid" or not 5 <= candidate_k <= 100):
+        raise ValueError("Reranking evaluation requires hybrid and candidate_k 5..100")
     dataset, documents, labels = load_dataset(path)
     for document in documents.values():
         writer.save(document)
@@ -112,15 +118,43 @@ def evaluate(
     by_language: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     cases: list[dict[str, object]] = []
     sparse = SparseRetriever(retriever.catalog, collection=retriever.index.collection)
-    hybrid = HybridRetriever(retriever)
+    hybrid = HybridRetriever(retriever, candidate_k=candidate_k)
+    baseline_aggregates: dict[str, list[float]] = defaultdict(list)
     for question in dataset.questions:
         started = perf_counter()
         if mode == "bm25":
             hits = sparse.search(question.query, k=5, filters=filters)
         elif mode == "hybrid":
-            hits = hybrid.search(question.query, k=5, filters=filters, exact=True)
+            hits = hybrid.search(
+                question.query, k=candidate_k if reranker else 5, filters=filters, exact=True
+            )
         else:
             hits = retriever.search(question.query, k=5, filters=filters, exact=True)
+        retrieval_seconds = perf_counter() - started
+        extra: dict[str, object] = {}
+        if reranker is not None:
+            candidate_ids = [str(hit.chunk_id) for hit in hits]
+            baseline_metrics = {}
+            for cutoff in (1, 3, 5):
+                baseline_metrics.update(
+                    retrieval_metrics(candidate_ids[:5], labels[question.id], cutoff)
+                )
+            for key, value in baseline_metrics.items():
+                baseline_aggregates[key].append(value)
+            rerank_started = perf_counter()
+            reranked = rerank(
+                question.query, hits, reranker, retriever.catalog, retriever.index.collection, k=5
+            )
+            extra = {
+                "candidate_ids": candidate_ids,
+                "candidate_recall": retrieval_metrics(
+                    candidate_ids, labels[question.id], candidate_k
+                )[f"recall@{candidate_k}"],
+                "baseline_metrics": baseline_metrics,
+                "retrieval_seconds": retrieval_seconds,
+                "reranking_seconds": perf_counter() - rerank_started,
+            }
+            hits = list(reranked)
         elapsed = perf_counter() - started
         ranked = [str(hit.chunk_id) for hit in hits]
         metrics = {}
@@ -131,6 +165,7 @@ def evaluate(
             by_language[question.language][key].append(value)
         cases.append(
             {
+                **extra,
                 "id": question.id,
                 "language": question.language,
                 "query": question.query,
@@ -152,10 +187,14 @@ def evaluate(
         raise RuntimeError("Dataset revision readiness changed during evaluation")
     return {
         "mode": mode,
+        "reranker": asdict(reranker.spec) if reranker else None,
+        "baseline_metrics": {
+            key: sum(values) / len(values) for key, values in baseline_aggregates.items()
+        },
         "retrieval_config": {
             "bm25": asdict(BM25Config()),
             "tokenizer": TOKENIZER_VERSION,
-            "candidate_k": 20,
+            "candidate_k": candidate_k,
             "rrf_rank_constant": 60,
             "corpus_policy": "filtered current+ready chunks; rebuild BM25 per query",
         },
@@ -198,4 +237,25 @@ def compare(path: Path, retriever: DenseRetriever, writer: DocumentWriter) -> di
         "timing_policy": (
             "Sequential runs; model loading excluded; BM25 rebuild included. Not a load benchmark."
         ),
+    }
+
+
+def compare_reranking(
+    path: Path,
+    retriever: DenseRetriever,
+    writer: DocumentWriter,
+    reranker: RerankingProvider,
+    *,
+    candidate_k: int = 20,
+) -> dict[str, object]:
+    """Paired comparison: identical retrieved candidates, labels, filters and query order."""
+    report = evaluate(
+        path, retriever, writer, mode="hybrid", reranker=reranker, candidate_k=candidate_k
+    )
+    return {
+        "metrics": {"hybrid": report["baseline_metrics"], "hybrid_reranked": report["metrics"]},
+        "run": report,
+        "timing_policy": "Same candidate pool; loading excluded; no warmup; first call included. "
+        "Retrieval includes BM25 rebuild; reranking includes final hydration. "
+        "Sequential development run, not a load benchmark.",
     }
