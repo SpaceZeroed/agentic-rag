@@ -5,11 +5,11 @@ about ML papers and technical documentation using traceable evidence. The target
 system combines retrieval, cited generation, a single tool-using agent, evaluation,
 and local model inference.
 
-**Current status: Stage 3 — dense, BM25 and hybrid retrieval.** Markdown/TXT ingestion retains
-canonical revisions in PostgreSQL. A pinned multilingual E5 model runs on CPU;
-Qdrant searches current indexed chunks with metadata filters. A fixed authored
-development set records actual retrieval metrics. Generation and HTTP endpoints
-remain future milestones.
+**Current status: Stage 5 — Basic RAG.** Markdown/TXT ingestion retains canonical
+revisions in PostgreSQL; dense/BM25/hybrid retrieval supports optional CPU reranking.
+`ask` builds a bounded context and returns a fake or compatible LLM answer with
+validated chunk citations. The default fake needs no inference server. Real answer
+quality, API endpoints and agents remain future milestones.
 
 See the Russian guides for [ingestion](docs/ingestion.md),
 [dense retrieval](docs/dense_retrieval.md) and [BM25/hybrid](docs/sparse_hybrid.md), including consistency, evaluation and
@@ -256,3 +256,31 @@ multilingual cross-encoder after retrieval. `evaluate DATASET --rerank --output 
 compares the same hybrid candidates before/after reranking. Use the existing
 `--extra embeddings`; models run locally on CPU. See [architecture, model choice,
 commands and limits](docs/reranking.md) and [measurements](docs/results.md).
+
+## Basic RAG (Stage 5)
+
+With PostgreSQL configured and documents ingested:
+
+```bash
+uv run --locked --extra embeddings agentic-rag ask 'PagedAttention' --mode bm25 --llm fake
+```
+
+BM25 + fake needs neither Qdrant nor model weights; the embeddings extra preserves
+an existing CPU installation. For the already indexed benchmark:
+
+```bash
+RAG_MODEL_LOCAL_FILES_ONLY=true uv run --locked --extra embeddings agentic-rag ask \
+  'Как PagedAttention управляет KV cache?' --mode hybrid \
+  --collection-prefix rag_dense_v1 --rerank --k 5 --llm fake
+```
+
+`--llm compatible` uses RAG_LLM_BASE_URL (default http://127.0.0.1:8000/v1),
+RAG_LLM_MODEL (required), and optional RAG_LLM_API_KEY. No hosted service is required.
+The HTTP adapter is transport-tested; a real generation server has not been verified.
+
+The output includes answer status, text, citations with exact revision/coordinates,
+and the supplied context. The 24000-byte prompt limit is **not a tokenizer count**;
+RAG_LLM_MAX_TOKENS separately limits generation. Valid citation IDs do not establish
+faithfulness; fake output is explicitly a test excerpt, not a generated answer.
+See the [Russian Stage 5 guide](docs/basic_rag.md) for architecture, failure behavior,
+server requirements and tests, and [ADR 0008](docs/adr/0008-basic-rag.md).

@@ -1,0 +1,1 @@
+"""Replaceable synchronous generation providers."""

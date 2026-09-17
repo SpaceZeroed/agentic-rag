@@ -277,3 +277,54 @@ def test_bm25_rerank_cli(
     assert report["reranked"] is True
     assert report["hits"][0]["score"] == 42.0
     assert report["hits"][0]["retrieval_rank"] == 1
+
+
+@pytest.mark.parametrize("mode", ["dense", "hybrid"])
+@pytest.mark.parametrize("use_rerank", [False, True])
+def test_ask_vector_modes(
+    database: Engine,
+    index: QdrantVectorIndex,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    use_rerank: bool,
+) -> None:
+    import json
+
+    from agentic_rag import cli
+    from agentic_rag.core.config import Settings
+    from agentic_rag.reranking.base import RerankingSpec
+
+    class Provider:
+        spec = RerankingSpec("fake", "a" * 40)
+
+        def score(self, query: str, passages: Sequence[str]) -> list[float]:
+            return [42.0] * len(passages)
+
+    def embeddings(settings: Settings) -> DeterministicEmbeddings:
+        return DeterministicEmbeddings()
+
+    def reranker(settings: Settings) -> Provider:
+        return Provider()
+
+    def make_index(*args: object) -> QdrantVectorIndex:
+        return index
+
+    doc = document(tmp_path, "alpha technical evidence")
+    PostgresDocumentRepository(database).save(doc)
+    retriever(database, index).sync()
+    monkeypatch.setenv("RAG_DATABASE_URL", database.url.render_as_string(hide_password=False))
+    monkeypatch.setattr(cli, "_load_embeddings", embeddings)
+    monkeypatch.setattr(cli, "_load_reranker", reranker)
+    monkeypatch.setattr(cli, "QdrantVectorIndex", make_index)
+    options = ["--rerank"] if use_rerank else []
+    assert cli.main(["ask", "alpha", "--mode", mode, "--k", "1", *options]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["answer"]["status"] == "answered"
+    source = report["answer"]["citations"][0]["source"]
+    assert source["revision_id"] == str(doc.revision_id)
+    assert source["text"] == doc.text
+    if use_rerank:
+        assert source["score"] == 42.0
+        assert source["retrieval_rank"] == 1

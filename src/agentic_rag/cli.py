@@ -8,6 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 from uuid import UUID
 
+import httpx
 from alembic.util.exc import CommandError
 from pydantic import ValidationError
 from qdrant_client import QdrantClient
@@ -20,10 +21,14 @@ from agentic_rag.embeddings.e5 import E5EmbeddingProvider
 from agentic_rag.ingestion.models import ChunkingConfig
 from agentic_rag.ingestion.parsing import DocumentInputError
 from agentic_rag.ingestion.service import prepare_document
+from agentic_rag.llm.base import LLMError
+from agentic_rag.llm.compatible import CompatibleLLM
+from agentic_rag.llm.fake import FakeLLM
+from agentic_rag.rag.service import answer
 from agentic_rag.reranking.cross_encoder import CrossEncoderProvider
 from agentic_rag.reranking.service import rerank
 from agentic_rag.retrieval.hybrid import HybridRetriever
-from agentic_rag.retrieval.models import SearchFilter
+from agentic_rag.retrieval.models import SearchFilter, SearchHit
 from agentic_rag.retrieval.qdrant import QdrantVectorIndex
 from agentic_rag.retrieval.service import DenseRetriever
 from agentic_rag.retrieval.sparse import SparseRetriever
@@ -47,10 +52,10 @@ def build_parser() -> argparse.ArgumentParser:
         command.add_argument("--overlap", type=int, default=200)
     commands.add_parser("db-upgrade", help="Apply packaged Alembic migrations")
     commands.add_parser("model-check", help="Load pinned CPU model and verify embedding output")
-    for name in ("index", "search", "evaluate"):
+    for name in ("index", "search", "ask", "evaluate"):
         command = commands.add_parser(name, help=f"{name.capitalize()} dense retrieval")
         command.add_argument("--collection-prefix")
-        if name in {"search", "evaluate"}:
+        if name in {"search", "ask", "evaluate"}:
             command.add_argument(
                 "--rerank", action="store_true", help="Score retrieved pairs with CPU cross-encoder"
             )
@@ -70,12 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--document-id", type=UUID, action="append", default=[])
             command.add_argument("--source-uri")
             command.add_argument("--media-type", choices=["text/plain", "text/markdown"])
-        if name == "search":
+        if name in {"search", "ask"}:
             command.add_argument("query")
             command.add_argument("--mode", choices=["dense", "bm25", "hybrid"], default="dense")
             command.add_argument("--candidate-k", type=int, default=20)
             command.add_argument("--k", type=int, default=5)
             command.add_argument("--approximate", action="store_true")
+        if name == "ask":
+            command.add_argument("--llm", choices=["fake", "compatible"], default="fake")
     show = commands.add_parser("show", help="Read a stored document and its chunks as JSON")
     show.add_argument("document_id", type=UUID)
     show.add_argument(
@@ -98,18 +105,20 @@ def _execute(args: argparse.Namespace, settings: Settings) -> int:
             )
         )
         return 0
-    if args.command in {"search", "evaluate"}:
+    if args.command in {"search", "ask", "evaluate"}:
         if not 1 <= args.rerank_k <= 100:
             raise ValueError("rerank-k must be 1..100")
-        if args.rerank and args.rerank_k < (args.k if args.command == "search" else 5):
+        if args.rerank and args.rerank_k < (args.k if args.command in {"search", "ask"} else 5):
             raise ValueError("rerank-k must cover final k")
-    if args.command == "search":
+    if args.command in {"search", "ask"}:
         if not args.query.strip() or not 1 <= args.k <= 100:
             raise ValueError("Query must be nonempty; k must be 1..100")
         if args.rerank and args.mode == "hybrid" and args.rerank_k > args.candidate_k:
             raise ValueError("Hybrid candidate-k must cover rerank-k")
     if args.command == "evaluate" and args.rerank and args.compare:
         raise ValueError("Use --compare or --rerank, not both")
+    if args.command == "ask" and args.llm == "compatible" and not settings.llm_model:
+        raise ValueError("Set RAG_LLM_MODEL for compatible generation")
     prepared = None
     if args.command in {"preview", "ingest"}:
         prepared = prepare_document(
@@ -125,7 +134,7 @@ def _execute(args: argparse.Namespace, settings: Settings) -> int:
         return 2
     engine = create_database_engine(settings.database_url.get_secret_value())
     try:
-        if args.command == "search" and args.mode == "bm25":
+        if args.command in {"search", "ask"} and args.mode == "bm25":
             if args.approximate or args.collection_prefix:
                 raise ValueError("BM25 does not use an approximate index or vector collection")
             hits = SparseRetriever(PostgresIndexCatalog(engine)).search(
@@ -144,19 +153,9 @@ def _execute(args: argparse.Namespace, settings: Settings) -> int:
                         k=args.k,
                     )
                 )
-            print(
-                json.dumps(
-                    {
-                        "reranked": args.rerank,
-                        "mode": "bm25",
-                        "hits": [asdict(hit) for hit in hits],
-                    },
-                    ensure_ascii=False,
-                    default=str,
-                )
-            )
+            _print_search(args, settings, hits, None)
             return 0
-        if args.command in {"index", "search", "evaluate"}:
+        if args.command in {"index", "search", "ask", "evaluate"}:
             model = _load_embeddings(settings)
             client = QdrantClient(
                 url=settings.qdrant_url,
@@ -218,18 +217,7 @@ def _execute(args: argparse.Namespace, settings: Settings) -> int:
                                     k=args.k,
                                 )
                             )
-                        print(
-                            json.dumps(
-                                {
-                                    "collection": index.collection,
-                                    "mode": args.mode,
-                                    "reranked": args.rerank,
-                                    "hits": [asdict(hit) for hit in hits],
-                                },
-                                ensure_ascii=False,
-                                default=str,
-                            )
-                        )
+                        _print_search(args, settings, hits, index.collection)
                 return 0
             finally:
                 client.close()
@@ -282,6 +270,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             # Driver messages may contain connection credentials or document text.
             logger.error("database_failed", extra={"fields": {"error_type": type(exc).__name__}})
             return 1
+        except LLMError as exc:
+            logger.error("generation_failed", extra={"fields": {"error_type": type(exc).__name__}})
+            return 1
         except (UnexpectedResponse, ResponseHandlingException, RuntimeError) as exc:
             logger.error("retrieval_failed", extra={"fields": {"error_type": type(exc).__name__}})
             return 1
@@ -317,3 +308,46 @@ def _load_reranker(settings: Settings) -> CrossEncoderProvider:
         threads=settings.reranking_threads,
         local_files_only=settings.model_local_files_only,
     )
+
+
+def _print_search(
+    args: argparse.Namespace,
+    settings: Settings,
+    hits: Sequence[SearchHit],
+    collection: str | None,
+) -> None:
+    payload: dict[str, object] = {"mode": args.mode, "reranked": args.rerank}
+    if collection is not None:
+        payload["collection"] = collection
+    if args.command == "ask":
+        if args.llm == "fake":
+            result = answer(
+                args.query,
+                hits,
+                FakeLLM(),
+                max_prompt_bytes=settings.llm_max_prompt_bytes,
+                max_tokens=settings.llm_max_tokens,
+            )
+        else:
+            headers = {}
+            if settings.llm_api_key:
+                headers["Authorization"] = f"Bearer {settings.llm_api_key.get_secret_value()}"
+            with httpx.Client(
+                base_url=settings.llm_base_url.rstrip("/") + "/",
+                headers=headers,
+                timeout=settings.llm_timeout_seconds,
+                follow_redirects=False,
+                trust_env=False,
+            ) as client:
+                result = answer(
+                    args.query,
+                    hits,
+                    CompatibleLLM(client, settings.llm_model or ""),
+                    max_prompt_bytes=settings.llm_max_prompt_bytes,
+                    max_tokens=settings.llm_max_tokens,
+                )
+        payload["llm_provider"] = args.llm
+        payload["answer"] = asdict(result)
+    else:
+        payload["hits"] = [asdict(hit) for hit in hits]
+    print(json.dumps(payload, ensure_ascii=False, default=str))

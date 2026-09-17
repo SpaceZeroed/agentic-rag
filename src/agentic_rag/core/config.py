@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 type LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -41,3 +41,10 @@ class Settings(BaseSettings):
     reranking_revision: str = "1427fd652930e4ba29e8149678df786c240d8825"
     reranking_batch_size: int = 4
     reranking_threads: int = 4
+
+    llm_base_url: str = "http://127.0.0.1:8000/v1"
+    llm_model: str | None = None
+    llm_api_key: SecretStr | None = None
+    llm_timeout_seconds: float = Field(default=60, gt=0, allow_inf_nan=False)
+    llm_max_prompt_bytes: int = Field(default=24000, ge=1)
+    llm_max_tokens: int = Field(default=512, ge=1)
