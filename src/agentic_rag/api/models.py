@@ -13,6 +13,17 @@ class InputModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class AgentRequest(InputModel):
+    query: str = Field(min_length=1, max_length=8000)
+
+    @field_validator("query")
+    @classmethod
+    def nonempty_query(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Query must contain non-whitespace text")
+        return value
+
+
 class QueryRequest(InputModel):
     query: str = Field(min_length=1, max_length=8000)
     k: int = Field(default=5, ge=1, le=100, strict=True)

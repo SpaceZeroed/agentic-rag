@@ -3,13 +3,17 @@
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
-from typing import Protocol
+from functools import partial
+from typing import Protocol, cast
 
 import anyio
 import httpx
 from qdrant_client import QdrantClient
 from sqlalchemy import select
 
+from agentic_rag.agents.fake import FakeToolLLM
+from agentic_rag.agents.models import AgentLimits
+from agentic_rag.agents.service import Agent
 from agentic_rag.api.models import DocumentRequest, DocumentResponse, QueryRequest
 from agentic_rag.core.config import Settings
 from agentic_rag.embeddings.e5 import E5EmbeddingProvider
@@ -17,6 +21,7 @@ from agentic_rag.ingestion.models import ChunkingConfig
 from agentic_rag.ingestion.parsing import parse_bytes
 from agentic_rag.ingestion.service import prepare_parsed
 from agentic_rag.llm.async_client import AsyncCompatibleLLM, AsyncFakeLLM, AsyncLLM
+from agentic_rag.llm.tool_client import CompatibleToolLLM, ToolLLM
 from agentic_rag.rag.context import Context, build_context
 from agentic_rag.reranking.base import RerankingProvider
 from agentic_rag.reranking.cross_encoder import CrossEncoderProvider
@@ -26,10 +31,12 @@ from agentic_rag.retrieval.models import SearchFilter, SearchHit
 from agentic_rag.retrieval.qdrant import QdrantVectorIndex
 from agentic_rag.retrieval.service import DenseRetriever
 from agentic_rag.retrieval.sparse import SparseRetriever
+from agentic_rag.storage.catalog import document_catalog
 from agentic_rag.storage.database import create_database_engine
 from agentic_rag.storage.models import DocumentRow
 from agentic_rag.storage.repository import PostgresDocumentRepository
 from agentic_rag.storage.retrieval import PostgresIndexCatalog
+from agentic_rag.tools.models import CatalogInput, CatalogOutput, SearchInput
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +45,7 @@ class Backend(Protocol):
     def context(self, request: QueryRequest) -> Context: ...
     def ingest(self, request: DocumentRequest) -> DocumentResponse: ...
     def health(self) -> dict[str, str]: ...
+    def catalog_documents(self, arguments: CatalogInput) -> CatalogOutput: ...
 
 
 class PostgresBackend:
@@ -81,6 +89,9 @@ class PostgresBackend:
                 threads=settings.reranking_threads,
                 local_files_only=settings.model_local_files_only,
             )
+
+    def catalog_documents(self, arguments: CatalogInput) -> CatalogOutput:
+        return document_catalog(self.engine, arguments)
 
     def context(self, request: QueryRequest) -> Context:
         settings = self.settings
@@ -149,19 +160,75 @@ class PostgresBackend:
 
 
 class Runtime:
-    def __init__(self, settings: Settings, backend: Backend, llm: AsyncLLM) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        backend: Backend,
+        llm: AsyncLLM,
+        tool_llm: ToolLLM | None = None,
+    ) -> None:
         self.settings = settings
         self.backend = backend
         self.llm = llm
         # Bound in-flight work; serialize shared CPU models and index mutations.
         self.requests = anyio.CapacityLimiter(settings.api_max_concurrent_requests)
         self.workers = anyio.CapacityLimiter(1)
+        self.agent = (
+            Agent(
+                tool_llm,
+                RuntimeTools(self),
+                AgentLimits(
+                    max_model_calls=settings.agent_max_model_calls,
+                    max_tool_calls=settings.agent_max_tool_calls,
+                    max_prompt_bytes=settings.agent_max_prompt_bytes,
+                    max_observation_bytes=settings.agent_max_observation_bytes,
+                    max_tokens=settings.llm_max_tokens,
+                ),
+                provider=settings.api_llm_provider,
+            )
+            if tool_llm is not None
+            else None
+        )
 
     async def run_sync[T](self, call: Callable[[], T]) -> T:
-        # Default shielding lets a started DB transaction finish before shutdown.
-        result = await anyio.to_thread.run_sync(call, limiter=self.workers)
+        # LangGraph cancels nodes with Task.cancel(), which can bypass a cancel
+        # scope in that task. A child owned by an AnyIO task group is cancelled
+        # through its scope; group exit waits for its shielded thread operation.
+        result: T | None = None
+        error: Exception | None = None
+
+        async def work() -> None:
+            nonlocal result, error
+            try:
+                result = await anyio.to_thread.run_sync(call, limiter=self.workers)
+            except Exception as exc:
+                error = exc
+
+        async with anyio.create_task_group() as group:
+            group.start_soon(work)
         await anyio.lowlevel.checkpoint()
-        return result
+        if error is not None:
+            raise error
+        return cast(T, result)
+
+
+class RuntimeTools:
+    def __init__(self, runtime: Runtime) -> None:
+        self.runtime = runtime
+
+    async def search(self, arguments: SearchInput) -> tuple[SearchHit, ...]:
+        context = await self.runtime.run_sync(
+            partial(
+                self.runtime.backend.context,
+                QueryRequest(query=arguments.query, k=arguments.k),
+            )
+        )
+        return tuple(c.source for c in context.sources)
+
+    async def catalog(self, arguments: CatalogInput) -> CatalogOutput:
+        return await self.runtime.run_sync(
+            partial(self.runtime.backend.catalog_documents, arguments)
+        )
 
 
 @asynccontextmanager
@@ -175,6 +242,7 @@ async def open_runtime(settings: Settings) -> AsyncIterator[Runtime]:
         backend = await anyio.to_thread.run_sync(lambda: PostgresBackend(settings, resources))
         async with AsyncExitStack() as stack:
             llm: AsyncLLM = AsyncFakeLLM()
+            tool_llm: ToolLLM = FakeToolLLM()
             if settings.api_llm_provider == "compatible":
                 headers = {}
                 if settings.llm_api_key:
@@ -193,7 +261,12 @@ async def open_runtime(settings: Settings) -> AsyncIterator[Runtime]:
                     settings.llm_model or "",
                     reasoning_enabled=settings.llm_reasoning_enabled,
                 )
-            yield Runtime(settings, backend, llm)
+                tool_llm = CompatibleToolLLM(
+                    client,
+                    settings.llm_model or "",
+                    reasoning_enabled=settings.llm_reasoning_enabled,
+                )
+            yield Runtime(settings, backend, llm, tool_llm)
     finally:
         with anyio.CancelScope(shield=True):
             await anyio.to_thread.run_sync(resources.close)

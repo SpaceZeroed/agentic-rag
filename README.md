@@ -5,13 +5,16 @@ about ML papers and technical documentation using traceable evidence. The target
 system combines retrieval, cited generation, a single tool-using agent, evaluation,
 and local model inference.
 
-**Current status: Stage 7 — HTTP API and streaming.** Markdown/TXT ingestion retains canonical
+**Current status: Stage 8 — bounded tool-using agent.** Markdown/TXT ingestion retains canonical
 revisions in PostgreSQL; dense/BM25/hybrid retrieval supports optional CPU reranking.
 `ask` builds a bounded context and returns a fake or compatible LLM answer with
 validated chunk citations. The default fake needs no inference server. A versioned evaluation set measures
 retrieval/context and exports answers for human semantic review. A real Qwen/Haiku API comparison and explicitly labeled assistant review are available;
 independent human evaluation remains pending. FastAPI exposes document upload, queries,
-health checks and SSE with provisional deltas and validated final answers. Agents are a future milestone.
+health checks and SSE with provisional deltas and validated final answers. A single
+LangGraph agent selects document search, bounded arithmetic, corpus metadata lookup,
+or a direct answer through `POST /agent`. Agent mechanics are tested with fake/mocked
+models; real-provider tool calling and agent answer quality have not been measured.
 
 See the Russian guides for [ingestion](docs/ingestion.md),
 [dense retrieval](docs/dense_retrieval.md) and [BM25/hybrid](docs/sparse_hybrid.md), including consistency, evaluation and
@@ -74,6 +77,30 @@ SSE deltas are drafts: only `result` is a validated answer. On `error` or missin
 `result`, discard the draft. The local API has no authentication or tenant isolation.
 See the [Russian API guide](docs/api.md) for contracts, lifecycle, cancellation,
 indexing retries, settings and tests.
+
+## Bounded agent
+
+Start the API with `RAG_API_LLM_PROVIDER=fake` for these offline model fixtures:
+
+```bash
+curl -sS http://127.0.0.1:8001/agent -H 'Content-Type: application/json' \
+  -d '{"query":"/calc 6 / 8 * 100"}'
+curl -sS http://127.0.0.1:8001/agent -H 'Content-Type: application/json' \
+  -d '{"query":"/catalog"}'
+curl -sS http://127.0.0.1:8001/agent -H 'Content-Type: application/json' \
+  -d '{"query":"/search PagedAttention"}'
+```
+
+Fake routing uses explicit commands and marks its output as a fixture. Search and
+catalog still use real storage. Compatible mode accepts natural-language questions
+and uses the configured model's `tools`/`tool_calls` support; one agent request can
+make multiple paid LLM calls. There is no automatic fake fallback.
+
+Responses expose status, basis (`model` or `tools`), observations, source snapshots,
+model/tool counts and available usage. C-markers refer to document passages;
+T-markers refer to calculator/catalog observations. Valid references do not prove
+semantic correctness. Budgets bound the loop; tool errors can be observations for
+model correction. See [the agent guide](docs/agent.md) and [ADR 0011](docs/adr/0011-bounded-agent.md).
 
 ## Ingest a document
 
@@ -258,6 +285,12 @@ src/agentic_rag/
     storage/                # SQLAlchemy adapter and packaged Alembic migrations
     embeddings/             # Provider contract and explicit CPU E5 pooling
     retrieval/              # Dense workflow and Qdrant adapter
+    reranking/              # Optional CPU cross-encoder
+    llm/                    # Fake/compatible generation and tool-calling adapters
+    rag/                    # Context packing and citation validation
+    api/                    # FastAPI entry point and resource lifecycle
+    agents/                 # Bounded LangGraph model/tools/finish loop
+    tools/                  # Strict tool schemas and bounded arithmetic
     evaluation/             # Fixed-label loader and explicit ranking metrics
 tests/
     conftest.py             # Isolated environment and working directory
@@ -273,7 +306,8 @@ docs/
 
 Start with [architecture](docs/architecture.md), then the
 [roadmap](docs/roadmap.md) and [interview notes](docs/interview_notes.md).
-Stages 0–3 are implemented. The next stage, after review, is cross-encoder reranking.
+Stages 0–8 are implemented. Stage 8 learning discussion is complete; MCP is the next
+stage only after explicit continuation.
 
 To continue in a new chat, read the [conversation handoff](docs/handoff.md) and
 the [original project brief](docs/project_brief.md). They preserve the working

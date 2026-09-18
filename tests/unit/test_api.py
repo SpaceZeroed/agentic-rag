@@ -9,6 +9,7 @@ import pytest
 from fastapi import FastAPI
 from starlette.types import Message as ASGIMessage
 
+from agentic_rag.agents.fake import FakeToolLLM
 from agentic_rag.api.app import create_app
 from agentic_rag.api.models import DocumentRequest, DocumentResponse, QueryRequest
 from agentic_rag.api.runtime import Runtime
@@ -16,8 +17,10 @@ from agentic_rag.core.config import Settings
 from agentic_rag.ingestion.models import IngestResult
 from agentic_rag.llm.async_client import AsyncFakeLLM, AsyncLLM, TextDelta
 from agentic_rag.llm.base import Completion, LLMError, Message
+from agentic_rag.llm.tool_client import ToolLLM, ToolTurn
 from agentic_rag.rag.context import Context, build_context
 from agentic_rag.retrieval.models import SearchHit
+from agentic_rag.tools.models import CatalogInput, CatalogOutput
 
 pytestmark = pytest.mark.anyio
 
@@ -32,6 +35,9 @@ async def api_client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
 
 
 class Backend:
+    def catalog_documents(self, arguments: CatalogInput) -> CatalogOutput:
+        return CatalogOutput(documents=(), offset=arguments.offset, has_more=False)
+
     def __init__(self) -> None:
         hit = SearchHit(
             UUID(int=1),
@@ -67,16 +73,22 @@ class Backend:
 
 
 class Factory:
-    def __init__(self, backend: Backend | None = None, llm: AsyncLLM | None = None) -> None:
+    def __init__(
+        self,
+        backend: Backend | None = None,
+        llm: AsyncLLM | None = None,
+        tool_llm: ToolLLM | None = None,
+    ) -> None:
         self.backend = backend or Backend()
         self.llm = llm or AsyncFakeLLM()
+        self.tool_llm = tool_llm
         self.opened = self.closed = 0
 
     @asynccontextmanager
     async def __call__(self, settings: Settings) -> AsyncIterator[Runtime]:
         self.opened += 1
         try:
-            yield Runtime(settings, self.backend, self.llm)
+            yield Runtime(settings, self.backend, self.llm, self.tool_llm)
         finally:
             self.closed += 1
 
@@ -211,12 +223,30 @@ class BlockingLLM(AsyncFakeLLM):
         yield await self.complete(messages, max_tokens=max_tokens)
 
 
-@pytest.mark.parametrize("stream", [False, True])
-async def test_deadline_and_busy_server(stream: bool) -> None:
+class BlockingToolLLM:
+    def __init__(self, blocker: BlockingLLM, *, search_first: bool = False) -> None:
+        self.blocker = blocker
+        self.search_first = search_first
+
+    async def complete(
+        self,
+        messages: tuple[dict[str, object], ...],
+        tools: list[dict[str, object]],
+        *,
+        max_tokens: int,
+    ) -> ToolTurn:
+        if self.search_first and messages[-1]["role"] == "user":
+            return await FakeToolLLM().complete(messages, tools, max_tokens=max_tokens)
+        await self.blocker.complete((), max_tokens=max_tokens)
+        raise AssertionError("unreachable")
+
+
+@pytest.mark.parametrize("path,stream", [("/query", False), ("/query", True), ("/agent", False)])
+async def test_deadline_and_busy_server(path: str, stream: bool) -> None:
     llm = BlockingLLM()
     app = create_app(
         Settings(api_request_timeout_seconds=0.15, api_max_concurrent_requests=1),
-        runtime_factory=Factory(llm=llm),
+        runtime_factory=Factory(llm=llm, tool_llm=BlockingToolLLM(llm)),
     )
     async with (
         app.router.lifespan_context(app),
@@ -225,7 +255,10 @@ async def test_deadline_and_busy_server(stream: bool) -> None:
         results: list[httpx.Response] = []
 
         async def first() -> None:
-            results.append(await client.post("/query", json={"query": "q", "stream": stream}))
+            body: dict[str, object] = {"query": "q"}
+            if path == "/query":
+                body["stream"] = stream
+            results.append(await client.post(path, json=body))
 
         async with anyio.create_task_group() as group:
             group.start_soon(first)
@@ -240,11 +273,11 @@ async def test_deadline_and_busy_server(stream: bool) -> None:
         assert app.state.runtime.requests.borrowed_tokens == 0
 
 
-@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("path,stream", [("/query", False), ("/query", True), ("/agent", False)])
 @pytest.mark.parametrize("spec", ["2.3", "2.4"])
-async def test_real_asgi_disconnect_cancels_generation(stream: bool, spec: str) -> None:
+async def test_real_asgi_disconnect_cancels_generation(path: str, stream: bool, spec: str) -> None:
     llm = BlockingLLM()
-    app = create_app(Settings(), runtime_factory=Factory(llm=llm))
+    app = create_app(Settings(), runtime_factory=Factory(llm=llm, tool_llm=BlockingToolLLM(llm)))
     disconnected = anyio.Event()
     request_sent = False
     sent: list[ASGIMessage] = []
@@ -255,7 +288,9 @@ async def test_real_asgi_disconnect_cancels_generation(stream: bool, spec: str) 
             request_sent = True
             return {
                 "type": "http.request",
-                "body": json.dumps({"query": "q", "stream": stream}).encode(),
+                "body": json.dumps(
+                    {"query": "q", **({"stream": stream} if path == "/query" else {})}
+                ).encode(),
             }
         await disconnected.wait()
         return {"type": "http.disconnect"}
@@ -267,8 +302,8 @@ async def test_real_asgi_disconnect_cancels_generation(stream: bool, spec: str) 
         "type": "http",
         "asgi": {"version": "3.0", "spec_version": spec},
         "method": "POST",
-        "path": "/query",
-        "raw_path": b"/query",
+        "path": path,
+        "raw_path": path.encode(),
         "query_string": b"",
         "scheme": "http",
         "server": ("test", 80),
@@ -308,7 +343,8 @@ async def test_chunked_body_limit() -> None:
         assert factory.backend.calls == 0
 
 
-async def test_disconnect_waits_for_started_sync_work_then_skips_llm() -> None:
+@pytest.mark.parametrize("path", ["/query", "/agent"])
+async def test_disconnect_waits_for_started_sync_work_then_skips_llm(path: str) -> None:
     import threading
 
     started = threading.Event()
@@ -323,7 +359,14 @@ async def test_disconnect_waits_for_started_sync_work_then_skips_llm() -> None:
             return self.result
 
     llm = BlockingLLM()
-    app = create_app(Settings(), runtime_factory=Factory(backend=SlowBackend(), llm=llm))
+    app = create_app(
+        Settings(),
+        runtime_factory=Factory(
+            backend=SlowBackend(),
+            llm=llm,
+            tool_llm=BlockingToolLLM(llm, search_first=True),
+        ),
+    )
     disconnected = anyio.Event()
     delivered = False
 
@@ -342,8 +385,8 @@ async def test_disconnect_waits_for_started_sync_work_then_skips_llm() -> None:
         "type": "http",
         "asgi": {"version": "3.0", "spec_version": "2.4"},
         "method": "POST",
-        "path": "/query",
-        "raw_path": b"/query",
+        "path": path,
+        "raw_path": path.encode(),
         "query_string": b"",
         "scheme": "http",
         "server": ("test", 80),
@@ -388,3 +431,44 @@ async def test_chunk_work_bound_and_health_failure() -> None:
         health = await client.get("/health")
         assert health.status_code == 503
         assert health.json()["status"] == "degraded"
+
+
+@pytest.mark.parametrize(
+    "query,basis",
+    [
+        ("/calc 6/8*100", "tools"),
+        ("/catalog", "tools"),
+        ("/search Факт", "tools"),
+        ("/direct", "model"),
+    ],
+)
+async def test_agent_endpoint_contract_and_fake_routes(query: str, basis: str) -> None:
+    factory = Factory(tool_llm=FakeToolLLM())
+    async with api_client(create_app(Settings(), runtime_factory=factory)) as client:
+        response = await client.post("/agent", json={"query": query})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "answered" and data["basis"] == basis
+        assert data["llm_provider"] == "fake"
+        assert data["model_calls"] == (1 if basis == "model" else 2)
+        if query.startswith("/search"):
+            assert data["citations"][0]["source"]["text"] == "Факт"
+        if query.startswith("/calc"):
+            assert data["observations"][0]["data"]["value"] == "75.00"
+        assert all(c["text"] == "" for c in data["completions"])
+    assert factory.closed == 1
+
+
+async def test_agent_limits_and_validation_are_visible_http_errors() -> None:
+    async with api_client(
+        create_app(
+            Settings(agent_max_model_calls=1), runtime_factory=Factory(tool_llm=FakeToolLLM())
+        )
+    ) as client:
+        response = await client.post("/agent", json={"query": "/calc 1+1"})
+        assert response.status_code == 422
+        assert response.json()["status"] == "limit_reached"
+        assert response.json()["tool_calls"] == 0
+        bad = await client.post("/agent", json={"query": " ", "max_steps": 9999})
+        assert bad.status_code == 422
+        assert bad.json()["error"] == "invalid_request"

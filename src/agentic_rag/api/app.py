@@ -14,7 +14,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from agentic_rag.api.models import DocumentRequest, DocumentResponse, QueryRequest, QueryResponse
+from agentic_rag.agents.models import AgentResult
+from agentic_rag.api.models import (
+    AgentRequest,
+    DocumentRequest,
+    DocumentResponse,
+    QueryRequest,
+    QueryResponse,
+)
 from agentic_rag.api.runtime import Runtime, open_runtime
 from agentic_rag.core.config import Settings
 from agentic_rag.llm.async_client import TextDelta
@@ -236,6 +243,30 @@ def create_app(
                         finalize_answer(context, completion), settings.api_llm_provider
                     )
                 return JSONResponse(result.model_dump(mode="json"))
+            except Exception as exc:
+                status, code = failure(exc)
+                return JSONResponse({"error": code}, status_code=status)
+
+        return await connected(request, operation) or JSONResponse(
+            {"error": "client_disconnected"}, status_code=499
+        )
+
+    @app.post("/agent", response_model=AgentResult)
+    async def agent(body: AgentRequest, request: Request) -> JSONResponse:
+        runtime = cast(Runtime, request.app.state.runtime)
+
+        async def operation() -> JSONResponse:
+            try:
+                async with request_budget(runtime):
+                    if runtime.agent is None:
+                        return JSONResponse({"error": "agent_unavailable"}, status_code=503)
+                    result = await runtime.agent.run(body.query)
+                status = 200
+                if result.status == "failed":
+                    status = 504 if result.error == "llm_timeout" else 502
+                elif result.status == "limit_reached":
+                    status = 422
+                return JSONResponse(result.model_dump(mode="json"), status_code=status)
             except Exception as exc:
                 status, code = failure(exc)
                 return JSONResponse({"error": code}, status_code=status)

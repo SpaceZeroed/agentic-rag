@@ -57,3 +57,8 @@ class Settings(BaseSettings):
     api_max_concurrent_requests: int = Field(default=8, ge=1, le=100)
     api_request_timeout_seconds: float = Field(default=180, gt=0, allow_inf_nan=False)
     api_max_body_bytes: int = Field(default=2 * 1024 * 1024, ge=1)
+
+    agent_max_model_calls: int = Field(default=6, ge=1, le=20)
+    agent_max_tool_calls: int = Field(default=8, ge=1, le=40)
+    agent_max_prompt_bytes: int = Field(default=48000, ge=1, le=1_000_000)
+    agent_max_observation_bytes: int = Field(default=12000, ge=256, le=100000)
