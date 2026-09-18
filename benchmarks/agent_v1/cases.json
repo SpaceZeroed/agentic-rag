@@ -1,0 +1,381 @@
+{
+  "schema_version": 1,
+  "name": "agent_v1",
+  "label_policy": "Assistant-authored development cases fixed before running this suite; pending human review, not a held-out benchmark. Cases partly derive from prior smoke findings. Expected criteria and fault fixtures must never be supplied to the model as hints.",
+  "corpus": {
+    "manifest": "../rag_v1/dataset.json",
+    "sha256": "9113c1442d707978e7b3e22f2aa53de15c3304e21a2d4d734b0acde90f102e0b",
+    "documents": "Use only the ten documents and max_chars/overlap from the manifest; do not reuse its questions as agent cases.",
+    "isolation": "Dedicated empty database/schema and search index, or verify exact active document/revision set before a run; never delete user data to prepare a run."
+  },
+  "run_policy": {
+    "model_calls_per_case": 6,
+    "tool_calls_per_case": 8,
+    "max_prompt_bytes": 48000,
+    "max_observation_bytes": 12000,
+    "max_tokens_per_call": 4096,
+    "deadline_seconds_per_case": 180,
+    "temperature": 0,
+    "reasoning_enabled": false,
+    "automatic_http_retries": 0,
+    "retrieval": "bm25",
+    "rerank": false,
+    "live_run_authorization": "Separate approval required before paid execution; fixed cases do not authorize a run.",
+    "freeze": "Record model, provider, commit, dirty diff hash, case-file hash, source hashes and effective settings before any run."
+  },
+  "review_dimensions": [
+    "task_completion",
+    "claim_support",
+    "citation_placement",
+    "failure_handling"
+  ],
+  "cases": [
+    {
+      "id": "direct_greeting",
+      "category": "direct",
+      "mode": "natural",
+      "query": "Привет! Ответь коротким приветствием без поиска и вычислений.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [],
+      "criteria": [
+        "Короткое приветствие без фактических заявлений о корпусе.",
+        "Ноль предложений инструментов; basis=model; нет выдуманных C/T ссылок."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "calculate_ratio",
+      "category": "calculation",
+      "mode": "natural",
+      "query": "Вычисли инструментом, сколько процентов составляет 6 от 8.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "calculate"
+      ],
+      "criteria": [
+        "Результат 75%, подтверждён успешным calculate.",
+        "Ссылка на результат стоит рядом с числом; допустима эквивалентная запись выражения."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "calculate_increase",
+      "category": "calculation",
+      "mode": "natural",
+      "query": "Используй калькулятор: было 240 запросов в секунду, стало 300. На сколько процентов выросла пропускная способность?",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "calculate"
+      ],
+      "criteria": [
+        "Ответ 25%, знаменатель исходные 240, а не новые 300.",
+        "Единицы и смысл относительного прироста сохранены; ссылка рядом с результатом."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "search_paged",
+      "category": "retrieval",
+      "mode": "natural",
+      "query": "По документам объясни, как PagedAttention хранит KV cache. Приведи подтверждающие источники.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "search_documents"
+      ],
+      "criteria": [
+        "Упомянуты блоки без обязательной непрерывности физической памяти и block table.",
+        "KV cache хранит ключи и значения, а не все веса модели.",
+        "Каждый существенный тезис поддержан процитированным passage; не добавлено отсутствующее название статьи."
+      ],
+      "evidence": [
+        {
+          "document": "paged_attention",
+          "text": "PagedAttention stores the KV cache in blocks that need not occupy contiguous physical memory."
+        },
+        {
+          "document": "paged_attention",
+          "text": "A block table maps logical token blocks to physical cache blocks."
+        }
+      ]
+    },
+    {
+      "id": "search_compare",
+      "category": "retrieval",
+      "mode": "natural",
+      "query": "Compare LoRA and QLoRA using the documents. What is trained, and what is stored in 4-bit precision? Cite the evidence.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "search_documents"
+      ],
+      "criteria": [
+        "Both methods train low-rank adapters; QLoRA stores the frozen base model in 4-bit precision.",
+        "LoRA alone is not described as base-model quantization.",
+        "Citations support claims about both methods; four-bit storage is not equated with every operation being four-bit."
+      ],
+      "evidence": [
+        {
+          "document": "lora",
+          "text": "LoRA freezes the pretrained weights and trains low-rank matrices for weight updates."
+        },
+        {
+          "document": "qlora",
+          "text": "QLoRA trains low-rank adapters through a frozen base model stored in 4-bit precision."
+        }
+      ]
+    },
+    {
+      "id": "search_false_premise",
+      "category": "retrieval",
+      "mode": "natural",
+      "query": "Верно ли по нашим документам, что FlashAttention занимается выделением постоянного KV cache при serving? Проверь и объясни со ссылкой.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "search_documents"
+      ],
+      "criteria": [
+        "Ложная предпосылка явно исправлена.",
+        "FlashAttention описан как IO-aware вычисление exact attention, не allocator постоянного KV cache."
+      ],
+      "evidence": [
+        {
+          "document": "flash_attention",
+          "text": "It is an IO-aware computation algorithm, not a method for allocating a serving system's persistent KV cache."
+        }
+      ]
+    },
+    {
+      "id": "catalog_page",
+      "category": "catalog",
+      "mode": "natural",
+      "query": "Покажи только первую страницу каталога: не более трёх документов. Для каждого укажи название и источник, а также скажи, есть ли следующая страница.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "document_catalog"
+      ],
+      "criteria": [
+        "Вызов catalog с limit=3, offset=0; перечислены ровно три документа этой страницы.",
+        "Название и URI совпадают со snapshot наблюдения. has_more=true не превращено в точный общий размер.",
+        "Пункты списка имеют понятную привязку к T-наблюдению; ссылка после завершающего вопроса не считается корректной привязкой."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "catalog_complete",
+      "category": "catalog",
+      "mode": "natural",
+      "query": "Перечисли все документы текущего корпуса и укажи их общее число. Если каталог возвращает страницы, получи недостающие.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "document_catalog"
+      ],
+      "criteria": [
+        "Все 10 документов фиксированного корпуса перечислены без повторов, общий размер 10.",
+        "Наблюдения действительно покрывают полный каталог: последняя использованная страница имеет has_more=false, нет пропущенных диапазонов.",
+        "Допустим один достаточно большой запрос; искусственно требовать несколько вызовов нельзя.",
+        "Пункты списка и итог подтверждены соответствующими T-наблюдениями."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "catalog_calculate",
+      "category": "combined",
+      "mode": "natural",
+      "query": "Найди в каталоге документ paged_attention, возьми его число чанков и калькулятором вычисли увеличение этого числа на 25%. Нужен арифметический результат без округления до целого.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "document_catalog",
+        "calculate"
+      ],
+      "criteria": [
+        "Выбран точный title paged_attention, не похожий документ.",
+        "Исходное число N взято из текущего наблюдения каталога; результат равен N * 1.25.",
+        "Вычисление зависит от найденного N; арифметический результат не заявлен как фактическая переиндексация.",
+        "Исходное N и результат имеют ссылки на каталог и калькулятор соответственно."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "absent_private_fact",
+      "category": "abstention",
+      "mode": "natural",
+      "query": "Найди в документах точную стоимость в рублях моего обучения LoRA вчера и укажи сумму.",
+      "setup": "standard",
+      "fault": null,
+      "expected_statuses": [
+        "insufficient_evidence"
+      ],
+      "required_successful_tools": [
+        "search_documents"
+      ],
+      "criteria": [
+        "Запрошенной персональной суммы нет во всём фиксированном корпусе.",
+        "После поиска агент отказывается, не подменяет сумму общими сведениями о LoRA и не придумывает стоимость."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "empty_retrieval",
+      "category": "abstention",
+      "mode": "controlled",
+      "query": "Найди, как PagedAttention хранит KV cache, и ответь только по найденным фрагментам.",
+      "setup": "empty_search",
+      "fault": {
+        "target": "ToolBackend.search",
+        "behavior": "Return an empty tuple on every search; catalog remains normal."
+      },
+      "expected_statuses": [
+        "insufficient_evidence"
+      ],
+      "required_successful_tools": [],
+      "criteria": [
+        "Есть попытка search_documents, каждый поиск вернул пустой tuple.",
+        "Нет подтверждённых C-источников, агент отказывается; знания модели не выданы за результат поиска."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "catalog_unavailable",
+      "category": "tool_failure",
+      "mode": "controlled",
+      "query": "Через каталог найди документ paged_attention и сообщи его число чанков.",
+      "setup": "unavailable_catalog",
+      "fault": {
+        "target": "ToolBackend.catalog",
+        "behavior": "Raise RuntimeError with a fixed non-sensitive fixture message on every invocation."
+      },
+      "expected_statuses": [
+        "insufficient_evidence",
+        "limit_reached"
+      ],
+      "required_successful_tools": [],
+      "criteria": [
+        "Есть попытка document_catalog; все такие вызовы дают tool_unavailable либо retry_exhausted.",
+        "Ни выдуманного числа чанков, ни ссылки на ошибку как на доказательство.",
+        "Одинаковая нормализованная сигнатура исполняется максимум дважды; общий model/tool budget соблюдён.",
+        "insufficient_evidence означает корректный отказ; limit_reached безопасен, но задача не завершена."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "malformed_catalog_arguments",
+      "category": "argument_recovery",
+      "mode": "controlled",
+      "query": "Покажи первую страницу каталога, не более трёх документов, со ссылками.",
+      "setup": "scripted_prefix",
+      "fault": {
+        "target": "ToolLLM.complete",
+        "prefix": [
+          {
+            "finish_reason": "tool_calls",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "fixture_bad_catalog",
+                "type": "function",
+                "function": {
+                  "name": "document_catalog",
+                  "arguments": "{\"limit\": 3, \"offset\": 0"
+                }
+              }
+            ]
+          }
+        ],
+        "continuation": "Live model after the single replayed response. Prefix is excluded from new paid usage but counts toward agent budgets."
+      },
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "document_catalog"
+      ],
+      "criteria": [
+        "Первый сохранённый вызов отклонён как invalid_arguments, backend для него не вызван.",
+        "В продолжении есть корректный catalog с limit=3, offset=0 и новым ID.",
+        "Нативная история больше не содержит malformed JSON; сохранён текст отклонённого вызова.",
+        "Ответ соответствует трём фактическим документам; исправление не скрывает ошибочное наблюдение."
+      ],
+      "evidence": []
+    },
+    {
+      "id": "uncited_catalog_answer",
+      "category": "citation_recovery",
+      "mode": "controlled",
+      "query": "Какие документы есть на первой странице каталога? Покажи не более трёх со ссылками.",
+      "setup": "scripted_prefix",
+      "fault": {
+        "target": "ToolLLM.complete",
+        "prefix": [
+          {
+            "finish_reason": "tool_calls",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "fixture_catalog",
+                "type": "function",
+                "function": {
+                  "name": "document_catalog",
+                  "arguments": "{\"limit\": 3, \"offset\": 0}"
+                }
+              }
+            ]
+          },
+          {
+            "finish_reason": "stop",
+            "content": "Первая страница каталога получена.",
+            "tool_calls": []
+          }
+        ],
+        "continuation": "Live model only for citation repair. First catalog call reads the isolated fixed corpus; scripted model turns are not model quality or new paid usage."
+      },
+      "expected_statuses": [
+        "answered"
+      ],
+      "required_successful_tools": [
+        "document_catalog"
+      ],
+      "criteria": [
+        "После первых двух fixture-ответов зафиксирован invalid_citations; далее ровно одна repair-попытка с tools disabled.",
+        "Исправленный ответ перечисляет три документа из наблюдения с понятными ссылками рядом с пунктами.",
+        "Одна ссылка после заключительного вопроса может пройти структурную проверку, но проваливает критерий размещения.",
+        "Исходная ошибка сохранена в citation_failures; новых инструментов в repair нет."
+      ],
+      "evidence": []
+    }
+  ]
+}

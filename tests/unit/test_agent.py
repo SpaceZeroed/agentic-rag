@@ -31,6 +31,7 @@ class Scripted:
     def __init__(self, *turns: ToolTurn | Exception) -> None:
         self.turns = iter(turns)
         self.histories: list[tuple[dict[str, object], ...]] = []
+        self.definitions: list[list[dict[str, object]]] = []
 
     async def complete(
         self,
@@ -40,6 +41,7 @@ class Scripted:
         max_tokens: int,
     ) -> ToolTurn:
         self.histories.append(messages)
+        self.definitions.append(definitions)
         turn = next(self.turns)
         if isinstance(turn, Exception):
             raise turn
@@ -114,6 +116,73 @@ async def test_invalid_arguments_are_observations_then_corrected() -> None:
     assert result.status == "answered"
     assert result.observations[0].error == "invalid_arguments"
     assert '"error":"invalid_arguments"' in str(llm.histories[1][-1]["content"])
+
+
+@pytest.mark.parametrize("raw", ['{"limit": 10, "offset": 10', "[]", "null", '{"x": NaN}'])
+async def test_malformed_arguments_recover_without_poisoning_wire_history(raw: str) -> None:
+    backend = Backend()
+    llm = Scripted(
+        tools(call("document_catalog", {"limit": 10}, "first")),
+        tools(ToolCall(id="bad", function=FunctionCall(name="document_catalog", arguments=raw))),
+        tools(call("document_catalog", {"limit": 10, "offset": 10}, "corrected")),
+        final("Catalog checked [T3]"),
+    )
+    result = await Agent(llm, backend).run("catalog")
+    assert result.status == "answered"
+    assert result.model_calls == 4 and result.tool_calls == 3
+    assert backend.catalogs == 2
+    assert result.observations[1].error == "invalid_arguments"
+    assert result.repair_attempts == 0
+    record = json.loads(str(llm.histories[2][-2]["content"]))
+    assert record["rejected_proposal"]["tool_calls"][0]["function"]["arguments"] == raw
+    # Every native call retains its paired result; malformed proposals are text.
+    for history in llm.histories:
+        pending: set[str] = set()
+        for message in history:
+            for proposal in json.loads(json.dumps(message.get("tool_calls", []))):
+                assert isinstance(json.loads(proposal["function"]["arguments"]), dict)
+                pending.add(proposal["id"])
+            if message["role"] == "tool":
+                pending.remove(str(message["tool_call_id"]))
+        assert not pending
+
+
+async def test_malformed_batch_executes_no_siblings_and_can_be_resubmitted() -> None:
+    backend = Backend()
+    llm = Scripted(
+        tools(
+            call("document_catalog", {}, "valid"),
+            ToolCall(id="bad", function=FunctionCall(name="calculate", arguments="{")),
+        ),
+        tools(call("document_catalog", {}, "new")),
+        final("Catalog checked [T3]"),
+    )
+    result = await Agent(llm, backend).run("catalog")
+    assert result.status == "answered"
+    assert backend.catalogs == 1
+    assert [o.error for o in result.observations] == ["batch_rejected", "invalid_arguments", None]
+    assert not result.observations[-1].cached
+    assert "No tool in that batch was executed" in str(llm.histories[1][-1]["content"])
+
+
+@pytest.mark.parametrize("tool_limit", [1, 8])
+async def test_malformed_retries_obey_shared_limits(tool_limit: int) -> None:
+    backend = Backend()
+    llm = Scripted(
+        *(
+            tools(
+                ToolCall(id=str(i), function=FunctionCall(name="document_catalog", arguments="{"))
+            )
+            for i in range(3)
+        )
+    )
+    result = await Agent(
+        llm, backend, AgentLimits(max_model_calls=3, max_tool_calls=tool_limit)
+    ).run("catalog")
+    assert result.status == "limit_reached"
+    assert result.error == ("tool_call_limit" if tool_limit == 1 else "model_call_limit")
+    assert result.tool_calls == min(tool_limit, 2)
+    assert backend.catalogs == 0
 
 
 async def test_unknown_tools_never_execute_backend() -> None:
@@ -191,10 +260,13 @@ async def test_limits_stop_without_executing_unusable_tools(
 )
 async def test_search_answer_citations_fail_closed(answer: str) -> None:
     result = await Agent(
-        Scripted(tools(call("search_documents", {"query": "x"})), final(answer)), Backend()
+        Scripted(tools(call("search_documents", {"query": "x"})), final(answer), final(answer)),
+        Backend(),
     ).run("x")
     assert result.status == "failed" and result.error == "invalid_citations"
     assert result.text == ""
+    assert result.repair_attempts == 1 and result.model_calls == 3
+    assert [failure.model_call for failure in result.citation_failures] == [2, 3]
 
 
 async def test_direct_answer_is_explicitly_unverified() -> None:
@@ -203,14 +275,14 @@ async def test_direct_answer_is_explicitly_unverified() -> None:
     assert result.status == "answered" and result.basis == "model"
     assert not result.citations and not result.observations
     assert backend.searches == 0
-    bad = await Agent(Scripted(final()), backend).run("x")
+    bad = await Agent(Scripted(final(), final()), backend).run("x")
     assert bad.error == "invalid_citations"
 
 
 async def test_no_hits_and_observation_overflow_do_not_create_sources() -> None:
     backend = Backend()
     result = await Agent(
-        Scripted(tools(call("search_documents", {"query": "x"})), final()),
+        Scripted(tools(call("search_documents", {"query": "x"})), final(), final()),
         backend,
         AgentLimits(max_observation_bytes=256),
     ).run("x")
@@ -275,3 +347,139 @@ async def test_cancellation_during_model_wait_never_calls_tools() -> None:
         await entered.wait()
         group.cancel_scope.cancel()
     assert closed.is_set() and backend.searches == 0
+
+
+@pytest.mark.parametrize(
+    "name,arguments,repaired,reference",
+    [
+        ("document_catalog", {}, "No documents [T1]", "T1"),
+        ("search_documents", {"query": "blocks"}, "Blocks [C1]", "C1"),
+    ],
+)
+async def test_citation_repair_uses_existing_evidence_once(
+    name: str,
+    arguments: dict[str, object],
+    repaired: str,
+    reference: str,
+) -> None:
+    backend = Backend()
+    llm = Scripted(tools(call(name, arguments)), final("Uncited draft"), final(repaired))
+    result = await Agent(llm, backend).run("x")
+    assert result.status == "answered" and result.text == repaired
+    assert result.model_calls == 3 and result.tool_calls == 1 and result.repair_attempts == 1
+    assert len(result.citation_failures) == 1
+    assert result.citation_failures[0].model_call == 2
+    assert result.citation_failures[0].error == "invalid_citations"
+    assert backend.searches + backend.catalogs == 1
+    assert llm.definitions[-1] == []
+    assert llm.histories[-1][-2] == {"role": "assistant", "content": "Uncited draft"}
+    assert llm.histories[-1][-1]["role"] == "system"
+    assert reference in str(llm.histories[-1][-1]["content"])
+    assert sum(c.prompt_tokens or 0 for c in result.completions) == 30
+    assert all(c.text == "" for c in result.completions)
+
+
+async def test_repair_may_abstain_without_evidence() -> None:
+    backend = Backend()
+    backend.hits = ()
+    llm = Scripted(
+        tools(call("search_documents", {"query": "x"})), final(), final("INSUFFICIENT_EVIDENCE")
+    )
+    result = await Agent(llm, backend).run("x")
+    assert result.status == "insufficient_evidence"
+    assert result.repair_attempts == 1 and len(result.citation_failures) == 1
+    assert not result.citations and not result.tool_references
+    assert "Available IDs: []" in str(llm.histories[-1][-1]["content"])
+
+
+@pytest.mark.parametrize(
+    "draft,expected,absent",
+    [
+        ("Catalog list", "no valid citation markers", "unavailable"),
+        ("Catalog [T99]", 'These cited IDs are unavailable: ["T99"]', "no valid citation"),
+        ("Catalog [T1, T2]", "malformed or grouped", "These cited IDs are unavailable"),
+    ],
+)
+async def test_repair_explains_the_actual_validation_error(
+    draft: str, expected: str, absent: str
+) -> None:
+    llm = Scripted(tools(call("document_catalog", {})), final(draft), final("Empty page [T1]"))
+    result = await Agent(llm, Backend()).run("catalog")
+    assert result.status == "answered" and result.repair_attempts == 1
+    prompt = str(llm.histories[-1][-1]["content"])
+    diagnostics = " ".join(
+        json.loads(prompt.split("Specific validation errors: ", 1)[1].split(". Make ONE", 1)[0])
+    )
+    assert expected in diagnostics and absent not in diagnostics
+    assert '"T1": "document_catalog result: one catalog page, not a total corpus count"' in prompt
+    assert "remove unsupported claims" in prompt
+    assert "cite each supported item" in prompt
+
+
+async def test_repair_describes_only_successful_evidence_without_promoting_source_text() -> None:
+    backend = Backend()
+    llm = Scripted(
+        tools(call("document_catalog", {"limit": "invalid"})),
+        tools(call("search_documents", {"query": "blocks"}, "b")),
+        tools(call("calculate", {"expression": "2+2"}, "c")),
+        final("Uncited"),
+        final("Blocks [C1]; 4 [T3]"),
+    )
+    result = await Agent(llm, backend).run("x")
+    assert result.status == "answered"
+    prompt = str(llm.histories[-1][-1]["content"])
+    evidence = json.loads(prompt.split("Evidence descriptions: ", 1)[1])
+    assert evidence == {
+        "C1": "retrieved document passage",
+        "T3": "calculate result: the supplied expression and computed value",
+    }
+    assert backend.hits[0].text not in prompt
+    assert backend.hits[0].source_uri not in prompt
+
+
+@pytest.mark.parametrize("limit", [1, 2])
+async def test_repair_does_not_exceed_model_budget(limit: int) -> None:
+    turns = [final()] if limit == 1 else [tools(call("document_catalog", {})), final("Uncited")]
+    llm = Scripted(*turns)
+    result = await Agent(llm, Backend(), AgentLimits(max_model_calls=limit)).run("x")
+    assert result.status == "limit_reached" and result.error == "model_call_limit"
+    assert result.model_calls == len(llm.histories) == limit
+    assert result.repair_attempts == 0
+    assert result.citation_failures[0].model_call == limit
+    assert result.text == ""
+
+
+async def test_repair_checks_full_prompt_budget_before_call() -> None:
+    # The initial small query fits; the long rejected final answer does not.
+    llm = Scripted(final("x" * 10000 + " [C1]"))
+    result = await Agent(llm, Backend(), AgentLimits(max_prompt_bytes=8000)).run("x")
+    assert result.status == "limit_reached" and result.error == "prompt_budget"
+    assert result.model_calls == 1 and len(llm.histories) == 1
+    assert result.repair_attempts == 0 and len(result.citation_failures) == 1
+
+
+async def test_repair_cannot_route_back_to_tools() -> None:
+    backend = Backend()
+    llm = Scripted(
+        tools(call("document_catalog", {})),
+        final("Uncited"),
+        tools(call("search_documents", {"query": "x"}, "b")),
+    )
+    result = await Agent(llm, backend).run("x")
+    assert result.status == "failed" and result.error == "repair_requested_tools"
+    assert result.repair_attempts == 1 and result.model_calls == 3
+    assert backend.catalogs == 1 and backend.searches == 0 and result.tool_calls == 1
+    assert len(result.citation_failures) == 1 and len(result.completions) == 3
+
+
+@pytest.mark.parametrize(
+    "error,code",
+    [(LLMError("private"), "generation_failed"), (TimeoutError("private"), "llm_timeout")],
+)
+async def test_repair_transport_failure_is_not_retried(error: Exception, code: str) -> None:
+    llm = Scripted(final(), error)
+    result = await Agent(llm, Backend()).run("x")
+    assert result.error == code and result.status == "failed"
+    assert result.model_calls == 2 and result.repair_attempts == 1
+    assert len(llm.histories) == 2 and len(result.citation_failures) == 1
+    assert "private" not in result.model_dump_json()

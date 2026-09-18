@@ -115,13 +115,14 @@ class CompatibleToolLLM:
         payload: dict[str, object] = {
             "model": self.model,
             "messages": list(messages),
-            "tools": tools,
-            "tool_choice": "auto",
-            "parallel_tool_calls": False,
+            "tool_choice": "auto" if tools else "none",
             "temperature": 0,
             "max_tokens": max_tokens,
             "stream": False,
         }
+        if tools:
+            payload["tools"] = tools
+            payload["parallel_tool_calls"] = False
         if self.reasoning_enabled is not None:
             payload["reasoning"] = {"enabled": self.reasoning_enabled}
         try:

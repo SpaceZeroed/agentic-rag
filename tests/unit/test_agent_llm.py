@@ -156,3 +156,30 @@ def test_duplicate_call_ids_rejected() -> None:
     }
     with pytest.raises(LLMError):
         parse_tool_turn(data)
+
+
+async def test_correction_request_disables_tools_on_wire() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        data = json.loads(request.content)
+        assert data["tool_choice"] == "none"
+        assert "tools" not in data and "parallel_tool_calls" not in data
+        return httpx.Response(
+            200,
+            json={
+                "model": "test",
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "content": "Corrected [T1]"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+
+    async with httpx.AsyncClient(
+        base_url="https://test/", transport=httpx.MockTransport(handler)
+    ) as client:
+        result = await CompatibleToolLLM(client, "test").complete(
+            ({"role": "user", "content": "x"},), [], max_tokens=20
+        )
+    assert result.completion.text == "Corrected [T1]" and not result.calls

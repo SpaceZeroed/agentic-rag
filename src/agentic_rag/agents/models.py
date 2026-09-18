@@ -7,6 +7,11 @@ from agentic_rag.rag.context import Citation
 from agentic_rag.tools.models import Observation
 
 
+class CitationFailure(BaseModel):
+    model_call: int
+    error: Literal["invalid_citations"] = "invalid_citations"
+
+
 class AgentResult(BaseModel):
     status: Literal["answered", "insufficient_evidence", "limit_reached", "failed"]
     text: str = ""
@@ -17,6 +22,8 @@ class AgentResult(BaseModel):
     completions: tuple[Completion, ...] = ()
     model_calls: int = 0
     tool_calls: int = 0
+    citation_failures: tuple[CitationFailure, ...] = ()
+    repair_attempts: int = 0
     error: str | None = None
     llm_provider: Literal["fake", "compatible"] = "fake"
 

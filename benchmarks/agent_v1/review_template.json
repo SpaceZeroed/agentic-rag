@@ -1,0 +1,428 @@
+{
+  "dataset": "agent_v1",
+  "run_manifest_sha256": null,
+  "reviewer": null,
+  "reviewer_type": null,
+  "cases": [
+    {
+      "id": "direct_greeting",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "calculate_ratio",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "calculate_increase",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "search_paged",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "search_compare",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "search_false_premise",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "catalog_page",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "catalog_complete",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "catalog_calculate",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "absent_private_fact",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "empty_retrieval",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "catalog_unavailable",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "malformed_catalog_arguments",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    },
+    {
+      "id": "uncited_catalog_answer",
+      "run_status": "not_run",
+      "report_sha256": null,
+      "structural_validation_passed": null,
+      "dimensions": {
+        "task_completion": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "claim_support": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "citation_placement": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        },
+        "failure_handling": {
+          "score": null,
+          "applicable": null,
+          "rationale": ""
+        }
+      },
+      "claim_reviews": [],
+      "notes": ""
+    }
+  ]
+}

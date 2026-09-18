@@ -17,7 +17,7 @@ from agentic_rag.core.config import Settings
 from agentic_rag.ingestion.models import IngestResult
 from agentic_rag.llm.async_client import AsyncFakeLLM, AsyncLLM, TextDelta
 from agentic_rag.llm.base import Completion, LLMError, Message
-from agentic_rag.llm.tool_client import ToolLLM, ToolTurn
+from agentic_rag.llm.tool_client import CompatibleToolLLM, ToolLLM, ToolTurn
 from agentic_rag.rag.context import Context, build_context
 from agentic_rag.retrieval.models import SearchHit
 from agentic_rag.tools.models import CatalogInput, CatalogOutput
@@ -224,9 +224,12 @@ class BlockingLLM(AsyncFakeLLM):
 
 
 class BlockingToolLLM:
-    def __init__(self, blocker: BlockingLLM, *, search_first: bool = False) -> None:
+    def __init__(
+        self, blocker: BlockingLLM, *, search_first: bool = False, repair_first: bool = False
+    ) -> None:
         self.blocker = blocker
         self.search_first = search_first
+        self.repair_first = repair_first
 
     async def complete(
         self,
@@ -235,18 +238,28 @@ class BlockingToolLLM:
         *,
         max_tokens: int,
     ) -> ToolTurn:
+        if self.repair_first and tools:
+            return ToolTurn(Completion("Invalid [C1]", "test", "stop"))
         if self.search_first and messages[-1]["role"] == "user":
             return await FakeToolLLM().complete(messages, tools, max_tokens=max_tokens)
         await self.blocker.complete((), max_tokens=max_tokens)
         raise AssertionError("unreachable")
 
 
-@pytest.mark.parametrize("path,stream", [("/query", False), ("/query", True), ("/agent", False)])
-async def test_deadline_and_busy_server(path: str, stream: bool) -> None:
+@pytest.mark.parametrize(
+    "path,stream,repair",
+    [
+        ("/query", False, False),
+        ("/query", True, False),
+        ("/agent", False, False),
+        ("/agent", False, True),
+    ],
+)
+async def test_deadline_and_busy_server(path: str, stream: bool, repair: bool) -> None:
     llm = BlockingLLM()
     app = create_app(
         Settings(api_request_timeout_seconds=0.15, api_max_concurrent_requests=1),
-        runtime_factory=Factory(llm=llm, tool_llm=BlockingToolLLM(llm)),
+        runtime_factory=Factory(llm=llm, tool_llm=BlockingToolLLM(llm, repair_first=repair)),
     )
     async with (
         app.router.lifespan_context(app),
@@ -273,11 +286,30 @@ async def test_deadline_and_busy_server(path: str, stream: bool) -> None:
         assert app.state.runtime.requests.borrowed_tokens == 0
 
 
-@pytest.mark.parametrize("path,stream", [("/query", False), ("/query", True), ("/agent", False)])
+@pytest.mark.parametrize(
+    "path,stream,repair",
+    [
+        ("/query", False, False),
+        ("/query", True, False),
+        ("/agent", False, False),
+        ("/agent", False, True),
+    ],
+)
 @pytest.mark.parametrize("spec", ["2.3", "2.4"])
-async def test_real_asgi_disconnect_cancels_generation(path: str, stream: bool, spec: str) -> None:
+async def test_real_asgi_disconnect_cancels_generation(
+    path: str,
+    stream: bool,
+    spec: str,
+    repair: bool,
+) -> None:
     llm = BlockingLLM()
-    app = create_app(Settings(), runtime_factory=Factory(llm=llm, tool_llm=BlockingToolLLM(llm)))
+    app = create_app(
+        Settings(),
+        runtime_factory=Factory(
+            llm=llm,
+            tool_llm=BlockingToolLLM(llm, repair_first=repair),
+        ),
+    )
     disconnected = anyio.Event()
     request_sent = False
     sent: list[ASGIMessage] = []
@@ -472,3 +504,108 @@ async def test_agent_limits_and_validation_are_visible_http_errors() -> None:
         bad = await client.post("/agent", json={"query": " ", "max_steps": 9999})
         assert bad.status_code == 422
         assert bad.json()["error"] == "invalid_request"
+
+
+@pytest.mark.parametrize("corrected,status", [("No documents [T1]", 200), ("Still uncited", 502)])
+async def test_agent_citation_repair_wire_and_public_provenance(
+    corrected: str, status: int
+) -> None:
+    requests: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        data = json.loads(request.content)
+        requests.append(data)
+        if len(requests) == 1:
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "a",
+                        "type": "function",
+                        "function": {"name": "document_catalog", "arguments": "{}"},
+                    }
+                ],
+            }
+            finish = "tool_calls"
+        else:
+            message = {
+                "role": "assistant",
+                "content": "No documents" if len(requests) == 2 else corrected,
+            }
+            finish = "stop"
+        if len(requests) == 3:
+            assert data["tool_choice"] == "none" and "tools" not in data
+        assert len(requests) <= 3
+        return httpx.Response(
+            200, json={"model": "test", "choices": [{"message": message, "finish_reason": finish}]}
+        )
+
+    async with httpx.AsyncClient(
+        base_url="https://test/", transport=httpx.MockTransport(handler)
+    ) as upstream:
+        factory = Factory(tool_llm=CompatibleToolLLM(upstream, "test"))
+        async with api_client(
+            create_app(Settings(api_llm_provider="compatible"), runtime_factory=factory)
+        ) as client:
+            response = await client.post("/agent", json={"query": "Which documents are available?"})
+    assert response.status_code == status
+    result = response.json()
+    assert result["repair_attempts"] == 1 and result["model_calls"] == 3
+    assert result["tool_calls"] == 1
+    assert result["citation_failures"][0] == {"model_call": 2, "error": "invalid_citations"}
+    assert len(result["citation_failures"]) == (1 if status == 200 else 2)
+    assert result["text"] == (corrected if status == 200 else "")
+
+
+async def test_agent_malformed_arguments_recover_through_compatible_wire() -> None:
+    requests: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        data = json.loads(request.content)
+        requests.append(data)
+        # Emulate a provider that rejects malformed historical tool arguments.
+        for message in data["messages"]:
+            for call in message.get("tool_calls", []):
+                assert isinstance(json.loads(call["function"]["arguments"]), dict)
+        step = len(requests)
+        assert step <= 3
+        if step < 3:
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": f"call_{step}",
+                        "type": "function",
+                        "function": {
+                            "name": "document_catalog",
+                            "arguments": '{"limit": 10, "offset": 10'
+                            if step == 1
+                            else '{"limit": 10, "offset": 10}',
+                        },
+                    }
+                ],
+            }
+            finish = "tool_calls"
+        else:
+            message = {"role": "assistant", "content": "This page is empty [T2]"}
+            finish = "stop"
+        return httpx.Response(
+            200, json={"model": "test", "choices": [{"message": message, "finish_reason": finish}]}
+        )
+
+    async with httpx.AsyncClient(
+        base_url="https://test/", transport=httpx.MockTransport(handler)
+    ) as upstream:
+        factory = Factory(tool_llm=CompatibleToolLLM(upstream, "test"))
+        async with api_client(
+            create_app(Settings(api_llm_provider="compatible"), runtime_factory=factory)
+        ) as client:
+            response = await client.post("/agent", json={"query": "List documents"})
+    assert response.status_code == 200
+    result = response.json()
+    assert result["model_calls"] == 3 and result["tool_calls"] == 2
+    assert result["observations"][0]["error"] == "invalid_arguments"
+    assert result["observations"][1]["data"]["offset"] == 10
+    assert result["repair_attempts"] == 0

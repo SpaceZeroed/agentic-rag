@@ -14,7 +14,10 @@ independent human evaluation remains pending. FastAPI exposes document upload, q
 health checks and SSE with provisional deltas and validated final answers. A single
 LangGraph agent selects document search, bounded arithmetic, corpus metadata lookup,
 or a direct answer through `POST /agent`. Agent mechanics are tested with fake/mocked
-models; real-provider tool calling and agent answer quality have not been measured.
+models. Four real Qwen smoke scenarios exercised tool calling: three API results were
+accepted, but one accepted answer contained an unsupported paper title; one other
+answer was rejected for missing citations. These are development checks, not an
+agent-quality benchmark; see [results](docs/results.md).
 
 See the Russian guides for [ingestion](docs/ingestion.md),
 [dense retrieval](docs/dense_retrieval.md) and [BM25/hybrid](docs/sparse_hybrid.md), including consistency, evaluation and
@@ -100,7 +103,35 @@ Responses expose status, basis (`model` or `tools`), observations, source snapsh
 model/tool counts and available usage. C-markers refer to document passages;
 T-markers refer to calculator/catalog observations. Valid references do not prove
 semantic correctness. Budgets bound the loop; tool errors can be observations for
-model correction. See [the agent guide](docs/agent.md) and [ADR 0011](docs/adr/0011-bounded-agent.md).
+model correction. A citation-validation failure permits one answer-repair call
+within the same model-call, prompt and deadline budgets, with tools disabled.
+The correction reports the specific structural errors (missing, malformed, or
+unavailable references), describes the available evidence types, and asks the model
+to cite supported claims and remove unsupported ones. These diagnostics do not
+check semantic entailment. In one controlled live replay of the same failed answer,
+the more specific correction produced only an appended `[T1]` after the closing
+question. This passed structural validation but did not follow the requested
+per-item citation placement; reliable claim-level attribution remains unverified.
+`citation_failures` and `repair_attempts` retain the initial failure even after a
+successful repair; a second invalid answer is rejected. One real Qwen correction
+succeeded using a replayed failed answer and frozen catalog snapshot. A separate
+fresh catalog run failed before repair on malformed tool arguments followed by a
+provider HTTP 400. This is not a measured repair success rate.
+Malformed JSON tool arguments now reject the entire proposed batch before execution.
+The exact rejected proposal is retained as ordinary text rather than native tool-call
+history; the model can resubmit valid calls within the existing budgets. Observations
+record `invalid_arguments` and `batch_rejected` for unexecuted siblings. In one live
+continuation of the recorded malformed call, the provider accepted the new history
+(HTTP 200). Qwen chose a partial catalog answer rather than a corrected tool call,
+then repeated its uncited answer during citation repair; the API rejected it with
+`invalid_citations`. Tool-call correction is covered locally, not yet demonstrated live.
+See [the agent guide](docs/agent.md) and [ADR 0011](docs/adr/0011-bounded-agent.md).
+
+The [agent development set](benchmarks/agent_v1/README.md) defines 14 fixed cases
+(10 natural tasks and 4 controlled fault scenarios), an isolated ten-note corpus,
+and separate criteria for task completion, claim support, citation placement and
+failure handling. Cases and an unscored review template are prepared; a runner and
+paid evaluation results are not yet available.
 
 ## Ingest a document
 
