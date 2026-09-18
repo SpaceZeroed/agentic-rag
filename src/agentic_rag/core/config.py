@@ -49,3 +49,11 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=60, gt=0, allow_inf_nan=False)
     llm_max_prompt_bytes: int = Field(default=24000, ge=1)
     llm_max_tokens: int = Field(default=512, ge=1)
+
+    api_llm_provider: Literal["fake", "compatible"] = "fake"
+    api_retrieval_mode: Literal["bm25", "dense", "hybrid"] = "bm25"
+    api_rerank: bool = False
+    api_candidate_k: int = Field(default=20, ge=1, le=100)
+    api_max_concurrent_requests: int = Field(default=8, ge=1, le=100)
+    api_request_timeout_seconds: float = Field(default=180, gt=0, allow_inf_nan=False)
+    api_max_body_bytes: int = Field(default=2 * 1024 * 1024, ge=1)

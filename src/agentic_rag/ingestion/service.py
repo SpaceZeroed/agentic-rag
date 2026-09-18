@@ -12,7 +12,7 @@ from agentic_rag.ingestion.models import (
     IngestResult,
     PreparedDocument,
 )
-from agentic_rag.ingestion.parsing import PARSER_VERSION, DocumentInputError, parse_file
+from agentic_rag.ingestion.parsing import PARSER_VERSION, DocumentInputError, ParsedText, parse_file
 
 
 def prepare_document(
@@ -20,6 +20,13 @@ def prepare_document(
 ) -> PreparedDocument:
     path = path.resolve()
     uri = path.as_uri() if source_uri is None else source_uri
+    return prepare_parsed(parse_file(path), config, source_uri=uri)
+
+
+def prepare_parsed(
+    parsed: ParsedText, config: ChunkingConfig, *, source_uri: str
+) -> PreparedDocument:
+    uri = source_uri
     if len(uri.encode("utf-8")) > 2048:
         raise DocumentInputError("Source URI exceeds the 2048-byte limit")
     try:
@@ -31,7 +38,6 @@ def prepare_document(
         or (parsed_uri.scheme == "file" and parsed_uri.path.startswith("/"))
     ) or any(character.isspace() for character in uri):
         raise DocumentInputError("Source URI must be an absolute file, HTTP or HTTPS URI")
-    parsed = parse_file(path)
     document_id = uuid5(NAMESPACE_URL, uri)
     identity = json.dumps(
         {

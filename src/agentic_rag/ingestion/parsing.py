@@ -22,14 +22,20 @@ class ParsedText:
 
 
 def parse_file(path: Path) -> ParsedText:
-    media_types = {".md": "text/markdown", ".txt": "text/plain"}
-    media_type = media_types.get(path.suffix.lower())
-    if media_type is None:
-        raise DocumentInputError("Only .md and .txt files are supported")
     if not path.is_file():
         raise DocumentInputError("Source must be a regular file")
     with path.open("rb") as stream:
         raw = stream.read(MAX_FILE_BYTES + 1)
+    return parse_bytes(raw, filename=path.name)
+
+
+def parse_bytes(raw: bytes, *, filename: str) -> ParsedText:
+    """Parse uploaded content without reading a caller-controlled server path."""
+    path = Path(filename)
+    media_types = {".md": "text/markdown", ".txt": "text/plain"}
+    media_type = media_types.get(path.suffix.lower())
+    if media_type is None:
+        raise DocumentInputError("Only .md and .txt files are supported")
     if len(raw) > MAX_FILE_BYTES:
         raise DocumentInputError("Source exceeds the 10 MiB file limit")
     try:

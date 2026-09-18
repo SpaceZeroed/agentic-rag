@@ -5,12 +5,13 @@ about ML papers and technical documentation using traceable evidence. The target
 system combines retrieval, cited generation, a single tool-using agent, evaluation,
 and local model inference.
 
-**Current status: Stage 6 — RAG evaluation.** Markdown/TXT ingestion retains canonical
+**Current status: Stage 7 — HTTP API and streaming.** Markdown/TXT ingestion retains canonical
 revisions in PostgreSQL; dense/BM25/hybrid retrieval supports optional CPU reranking.
 `ask` builds a bounded context and returns a fake or compatible LLM answer with
 validated chunk citations. The default fake needs no inference server. A versioned evaluation set measures
 retrieval/context and exports answers for human semantic review. A real Qwen/Haiku API comparison and explicitly labeled assistant review are available;
-independent human evaluation remains pending; API endpoints and agents are future milestones.
+independent human evaluation remains pending. FastAPI exposes document upload, queries,
+health checks and SSE with provisional deltas and validated final answers. Agents are a future milestone.
 
 See the Russian guides for [ingestion](docs/ingestion.md),
 [dense retrieval](docs/dense_retrieval.md) and [BM25/hybrid](docs/sparse_hybrid.md), including consistency, evaluation and
@@ -45,6 +46,34 @@ RAG_ENVIRONMENT=test RAG_LOG_LEVEL=DEBUG uv run --locked agentic-rag
 ```
 
 The inline environment syntax above is for Bash and similar shells.
+
+## HTTP API
+
+With PostgreSQL running and the existing `.env` configured:
+
+```bash
+uv sync --locked --extra embeddings
+uv run --locked --extra embeddings agentic-rag db-upgrade
+RAG_API_LLM_PROVIDER=compatible uv run --locked --extra embeddings uvicorn \
+  agentic_rag.api.app:create_app --factory --host 127.0.0.1 --port 8001
+```
+
+Use `RAG_API_LLM_PROVIDER=fake` for local checks without paid generation.
+The API defaults to BM25; dense/hybrid and reranking are server settings.
+Swagger UI: http://127.0.0.1:8001/docs. No key needs to be copied out of `.env`.
+
+```bash
+curl -sS http://127.0.0.1:8001/health
+curl -sS http://127.0.0.1:8001/documents -H 'Content-Type: application/json' \
+  -d '{"filename":"cache.md","source_uri":"https://example.org/cache","content":"PagedAttention allocates KV cache in blocks."}'
+curl -N http://127.0.0.1:8001/query -H 'Content-Type: application/json' \
+  -d '{"query":"How does PagedAttention allocate KV cache?","stream":true}'
+```
+
+SSE deltas are drafts: only `result` is a validated answer. On `error` or missing
+`result`, discard the draft. The local API has no authentication or tenant isolation.
+See the [Russian API guide](docs/api.md) for contracts, lifecycle, cancellation,
+indexing retries, settings and tests.
 
 ## Ingest a document
 

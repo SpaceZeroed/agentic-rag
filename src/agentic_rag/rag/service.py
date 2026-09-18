@@ -32,10 +32,17 @@ def answer(
     if max_tokens < 1:
         raise ValueError("max_tokens must be positive")
     context = build_context(query, hits, max_prompt_bytes=max_prompt_bytes)
+    completion = llm.complete(context.messages, max_tokens=max_tokens) if context.sources else None
+    return finalize_answer(context, completion)
+
+
+def finalize_answer(context: Context, completion: Completion | None) -> Answer:
+    """One final validation contract for CLI, async HTTP and streamed generation."""
     abstention = "Недостаточно данных в переданном контексте."
     if not context.sources:
         return Answer("insufficient_evidence", abstention, (), context, None)
-    completion = llm.complete(context.messages, max_tokens=max_tokens)
+    if completion is None:
+        raise LLMError("Missing completion for nonempty context")
     if completion.finish_reason != "stop" or not completion.text.strip():
         raise LLMError("LLM did not return a complete text answer")
     text = completion.text.strip()

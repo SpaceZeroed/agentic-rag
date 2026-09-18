@@ -51,3 +51,8 @@ def database(request: pytest.FixtureRequest) -> Iterator[Engine]:
         with admin.begin() as connection:
             connection.execute(DropSchema(schema, cascade=True))
         admin.dispose()
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"

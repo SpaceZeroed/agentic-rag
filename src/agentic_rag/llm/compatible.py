@@ -55,33 +55,52 @@ class CompatibleLLM:
         try:
             response = self.client.post(
                 "chat/completions",
-                json={
-                    "model": self.model,
-                    "messages": [asdict(message) for message in messages],
-                    "max_tokens": max_tokens,
-                    "temperature": 0,
-                    "stream": False,
-                    **(
-                        {"reasoning": {"enabled": self.reasoning_enabled}}
-                        if self.reasoning_enabled is not None
-                        else {}
-                    ),
-                },
+                json=request_payload(
+                    self.model, messages, max_tokens, self.reasoning_enabled, stream=False
+                ),
             )
             response.raise_for_status()
-            result = _Response.model_validate(response.json())
+            return parse_completion(response.json())
         except (httpx.HTTPError, ValidationError, ValueError) as exc:
             raise LLMError("LLM transport or response failure") from exc
-        choice = result.choices[0]
-        completion = Completion(
-            choice.message.content or "",
-            result.model,
-            choice.finish_reason,
-            result.usage.prompt_tokens if result.usage else None,
-            result.usage.completion_tokens if result.usage else None,
-            result.usage.cost if result.usage else None,
-            len(choice.message.reasoning_content or choice.message.reasoning or ""),
-        )
-        if choice.finish_reason != "stop" or not completion.text.strip():
-            raise IncompleteCompletionError(completion)
-        return completion
+
+
+def parse_completion(payload: object) -> Completion:
+    result = _Response.model_validate(payload)
+    choice = result.choices[0]
+    completion = Completion(
+        choice.message.content or "",
+        result.model,
+        choice.finish_reason,
+        result.usage.prompt_tokens if result.usage else None,
+        result.usage.completion_tokens if result.usage else None,
+        result.usage.cost if result.usage else None,
+        len(choice.message.reasoning_content or choice.message.reasoning or ""),
+    )
+    if choice.finish_reason != "stop" or not completion.text.strip():
+        raise IncompleteCompletionError(completion)
+    return completion
+
+
+def request_payload(
+    model: str,
+    messages: tuple[Message, ...],
+    max_tokens: int,
+    reasoning_enabled: bool | None,
+    *,
+    stream: bool,
+) -> dict[str, object]:
+    if not messages or max_tokens < 1:
+        raise ValueError("Messages and positive max_tokens required")
+    payload: dict[str, object] = {
+        "model": model,
+        "messages": [asdict(message) for message in messages],
+        "max_tokens": max_tokens,
+        "temperature": 0,
+        "stream": stream,
+    }
+    if reasoning_enabled is not None:
+        payload["reasoning"] = {"enabled": reasoning_enabled}
+    if stream:
+        payload["stream_options"] = {"include_usage": True}
+    return payload
