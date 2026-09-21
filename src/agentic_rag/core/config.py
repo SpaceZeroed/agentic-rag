@@ -62,3 +62,9 @@ class Settings(BaseSettings):
     agent_max_tool_calls: int = Field(default=8, ge=1, le=40)
     agent_max_prompt_bytes: int = Field(default=48000, ge=1, le=1_000_000)
     agent_max_observation_bytes: int = Field(default=12000, ge=256, le=100000)
+
+    observability_enabled: bool = False
+    langfuse_enabled: bool = False
+    langfuse_base_url: str = "http://127.0.0.1:3000"
+    langfuse_public_key: SecretStr | None = None
+    langfuse_secret_key: SecretStr | None = None

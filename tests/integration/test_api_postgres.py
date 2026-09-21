@@ -198,7 +198,7 @@ async def test_lifespan_closes_http_and_database_on_failure(
     )
     with pytest.raises(RuntimeError, match="test failure"):
         async with open_runtime(settings) as runtime:
-            llm = runtime.llm
+            llm = runtime.llm.wrapped
             assert isinstance(llm, AsyncCompatibleLLM)
             client = llm.client
             assert not client.is_closed

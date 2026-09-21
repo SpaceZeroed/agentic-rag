@@ -1,0 +1,118 @@
+# Local observability stack; separate project and volumes from the RAG databases.
+# Based on https://github.com/langfuse/langfuse/blob/main/docker-compose.yml
+name: retrieval-langfuse
+x-app-env: &app-env
+  DATABASE_URL: postgresql://langfuse:${LF_POSTGRES_PASSWORD:?run init script}@postgres:5432/langfuse
+  NEXTAUTH_URL: http://localhost:3000
+  NEXTAUTH_SECRET: ${LF_AUTH_SECRET:?run init script}
+  SALT: ${LF_SALT:?run init script}
+  ENCRYPTION_KEY: ${LF_ENCRYPTION_KEY:?run init script}
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: langfuse
+  CLICKHOUSE_PASSWORD: ${LF_CLICKHOUSE_PASSWORD:?run init script}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_AUTH: ${LF_REDIS_PASSWORD:?run init script}
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LF_S3_PASSWORD:?run init script}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LF_S3_PASSWORD:?run init script}
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
+  LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+
+services:
+  web:
+    image: docker.langfuse.com/langfuse/langfuse:4@sha256:47ef2f121e2959c8458c209d118949ade25778017e3f5b75b1e45f72276811c3
+    restart: unless-stopped
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: &dependencies
+      postgres: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      minio: {condition: service_healthy}
+    environment:
+      <<: *app-env
+      LANGFUSE_INIT_ORG_ID: retrieval-local
+      LANGFUSE_INIT_ORG_NAME: Retrieval Project
+      LANGFUSE_INIT_PROJECT_ID: retrieval-rag
+      LANGFUSE_INIT_PROJECT_NAME: Agentic RAG
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${RAG_LANGFUSE_PUBLIC_KEY:?run init script}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${RAG_LANGFUSE_SECRET_KEY:?run init script}
+      LANGFUSE_INIT_USER_EMAIL: local@example.com
+      LANGFUSE_INIT_USER_NAME: Local Developer
+      LANGFUSE_INIT_USER_PASSWORD: ${LF_LOGIN_PASSWORD:?run init script}
+  worker:
+    image: docker.langfuse.com/langfuse/langfuse-worker:4@sha256:8631cf429efc4a2981d4e6ced4c005b9f6f620a4e34625baf60152301ec6d006
+    restart: unless-stopped
+    depends_on: *dependencies
+    environment: *app-env
+  postgres:
+    image: postgres:17-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${LF_POSTGRES_PASSWORD:?run init script}
+      POSTGRES_DB: langfuse
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "langfuse"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.12@sha256:8a790dd3468db22b1d4e7b18a176f378ff5ff6053b9c48dd4ea1fa71a24c5ba6
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${LF_CLICKHOUSE_PASSWORD:?run init script}
+    volumes: ["clickhouse:/var/lib/clickhouse", "clickhouse_logs:/var/log/clickhouse-server"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  redis:
+    image: redis:7@sha256:c6eabf748fc7a61dbb5a705c78bcf3d6377b1127a97d0ce965c11c44ba46896f
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${LF_REDIS_PASSWORD:?run init script}", "--maxmemory-policy", "noeviction"]
+    environment:
+      REDISCLI_AUTH: ${LF_REDIS_PASSWORD:?run init script}
+    volumes: ["redis:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    restart: unless-stopped
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
+    environment:
+      MINIO_ROOT_USER: langfuse
+      MINIO_ROOT_PASSWORD: ${LF_S3_PASSWORD:?run init script}
+    ports: ["127.0.0.1:9090:9000"]
+    volumes: ["minio:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+volumes:
+  postgres:
+  clickhouse:
+  clickhouse_logs:
+  redis:
+  minio:

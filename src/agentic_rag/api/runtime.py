@@ -22,6 +22,8 @@ from agentic_rag.ingestion.parsing import parse_bytes
 from agentic_rag.ingestion.service import prepare_parsed
 from agentic_rag.llm.async_client import AsyncCompatibleLLM, AsyncFakeLLM, AsyncLLM
 from agentic_rag.llm.tool_client import CompatibleToolLLM, ToolLLM
+from agentic_rag.observability.llm import TracedLLM
+from agentic_rag.observability.tracing import span
 from agentic_rag.rag.context import Context, build_context
 from agentic_rag.reranking.base import RerankingProvider
 from agentic_rag.reranking.cross_encoder import CrossEncoderProvider
@@ -103,20 +105,28 @@ class PostgresBackend:
         k = settings.api_candidate_k if self.reranker else request.k
         collection = None
         hits: list[SearchHit]
-        if self.dense is None:
-            hits = self.sparse.search(request.query, k=k, filters=filters)
-        else:
-            collection = self.dense.index.collection
-            if settings.api_retrieval_mode == "hybrid":
-                hits = HybridRetriever(self.dense, candidate_k=settings.api_candidate_k).search(
-                    request.query, k=k, filters=filters
-                )
+        with span("retrieval") as current:
+            current.set(mode=settings.api_retrieval_mode)
+            if self.dense is None:
+                hits = self.sparse.search(request.query, k=k, filters=filters)
             else:
-                hits = self.dense.search(request.query, k=k, filters=filters)
+                collection = self.dense.index.collection
+                if settings.api_retrieval_mode == "hybrid":
+                    hits = HybridRetriever(self.dense, candidate_k=settings.api_candidate_k).search(
+                        request.query, k=k, filters=filters
+                    )
+                else:
+                    hits = self.dense.search(request.query, k=k, filters=filters)
+            current.set(candidate_count=len(hits))
         if self.reranker and hits:
-            hits = list(
-                rerank(request.query, hits, self.reranker, self.catalog, collection, k=request.k)
-            )
+            with span("reranking") as current:
+                current.set(candidate_count=len(hits))
+                hits = list(
+                    rerank(
+                        request.query, hits, self.reranker, self.catalog, collection, k=request.k
+                    )
+                )
+                current.set(source_count=len(hits))
         return build_context(request.query, hits, max_prompt_bytes=settings.llm_max_prompt_bytes)
 
     def ingest(self, request: DocumentRequest) -> DocumentResponse:
@@ -169,7 +179,7 @@ class Runtime:
     ) -> None:
         self.settings = settings
         self.backend = backend
-        self.llm = llm
+        self.llm = TracedLLM(llm)
         # Bound in-flight work; serialize shared CPU models and index mutations.
         self.requests = anyio.CapacityLimiter(settings.api_max_concurrent_requests)
         self.workers = anyio.CapacityLimiter(1)

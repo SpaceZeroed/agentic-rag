@@ -18,6 +18,7 @@ from agentic_rag.ingestion.models import IngestResult
 from agentic_rag.llm.async_client import AsyncFakeLLM, AsyncLLM, TextDelta
 from agentic_rag.llm.base import Completion, LLMError, Message
 from agentic_rag.llm.tool_client import CompatibleToolLLM, ToolLLM, ToolTurn
+from agentic_rag.observability.tracing import Tracer
 from agentic_rag.rag.context import Context, build_context
 from agentic_rag.retrieval.models import SearchHit
 from agentic_rag.tools.models import CatalogInput, CatalogOutput
@@ -303,8 +304,10 @@ async def test_real_asgi_disconnect_cancels_generation(
     repair: bool,
 ) -> None:
     llm = BlockingLLM()
+    records: list[dict[str, object]] = []
     app = create_app(
         Settings(),
+        tracer=Tracer(on_end=records.append),
         runtime_factory=Factory(
             llm=llm,
             tool_llm=BlockingToolLLM(llm, repair_first=repair),
@@ -353,6 +356,13 @@ async def test_real_asgi_disconnect_cancels_generation(
         assert llm.cancelled
         assert app.state.runtime.requests.borrowed_tokens == 0
         assert not any(b"event: result" in message.get("body", b"") for message in sent)
+        assert records[-1]["name"] == "http.request"
+        assert records[-1]["status"] == "cancelled"
+        assert any(
+            r["name"].startswith("llm.") and r["status"] == "cancelled"
+            for r in records
+            if isinstance(r["name"], str)
+        )
 
 
 async def test_chunked_body_limit() -> None:

@@ -11,7 +11,7 @@ from typing import cast
 import anyio
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from agentic_rag.agents.models import AgentResult
@@ -26,6 +26,9 @@ from agentic_rag.api.runtime import Runtime, open_runtime
 from agentic_rag.core.config import Settings
 from agentic_rag.llm.async_client import TextDelta
 from agentic_rag.llm.base import Completion, LLMError
+from agentic_rag.observability.langfuse import configured_tracer
+from agentic_rag.observability.middleware import TraceRequests
+from agentic_rag.observability.tracing import Tracer, mark_failure, span
 from agentic_rag.rag.service import finalize_answer
 
 logger = logging.getLogger(__name__)
@@ -100,6 +103,7 @@ class CancellableStream(StreamingResponse):
 
 
 def failure(exc: Exception) -> tuple[int, str]:
+    mark_failure(type(exc).__name__)
     if isinstance(exc, anyio.WouldBlock):
         return 503, "server_busy"
     if isinstance(exc, TimeoutError):
@@ -149,7 +153,9 @@ def event(name: str, payload: object) -> str:
 async def stream_query(runtime: Runtime, query: QueryRequest) -> AsyncGenerator[str, None]:
     try:
         async with request_budget(runtime):
-            context = await runtime.run_sync(partial(runtime.backend.context, query))
+            with span("context") as current:
+                context = await runtime.run_sync(partial(runtime.backend.context, query))
+                current.set(source_count=len(context.sources))
             yield event("sources", {"sources": [asdict(source) for source in context.sources]})
             completion: Completion | None = None
             if context.sources:
@@ -170,18 +176,37 @@ async def stream_query(runtime: Runtime, query: QueryRequest) -> AsyncGenerator[
 
 
 def create_app(
-    settings: Settings | None = None, *, runtime_factory: RuntimeFactory = open_runtime
+    settings: Settings | None = None,
+    *,
+    runtime_factory: RuntimeFactory = open_runtime,
+    tracer: Tracer | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
+    telemetry = tracer or Tracer(enabled=settings.observability_enabled)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        async with runtime_factory(settings) as runtime:
-            app.state.runtime = runtime
-            yield
+        if tracer is None:
+            telemetry.sink = configured_tracer(settings).sink
+        try:
+            async with runtime_factory(settings) as runtime:
+                app.state.runtime = runtime
+                yield
+        finally:
+            with anyio.CancelScope(shield=True):
+                await anyio.to_thread.run_sync(telemetry.close)
 
     app = FastAPI(title="Agentic RAG", version="0.1.0", lifespan=lifespan)
     app.add_middleware(BodyLimit, max_bytes=settings.api_max_body_bytes)
+    app.add_middleware(TraceRequests, tracer=telemetry)
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> PlainTextResponse:
+        return PlainTextResponse(
+            telemetry.metrics.render() if telemetry.enabled else "Not found\n",
+            status_code=200 if telemetry.enabled else 404,
+            media_type="text/plain; version=0.0.4",
+        )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -201,7 +226,8 @@ def create_app(
         async def operation() -> JSONResponse:
             try:
                 async with request_budget(runtime):
-                    result = await runtime.run_sync(partial(runtime.backend.ingest, document))
+                    with span("ingest"):
+                        result = await runtime.run_sync(partial(runtime.backend.ingest, document))
                 status = (
                     503
                     if result.index_status == "failed"
@@ -231,7 +257,9 @@ def create_app(
         async def operation() -> JSONResponse:
             try:
                 async with request_budget(runtime):
-                    context = await runtime.run_sync(partial(runtime.backend.context, body))
+                    with span("context") as current:
+                        context = await runtime.run_sync(partial(runtime.backend.context, body))
+                        current.set(source_count=len(context.sources))
                     completion = (
                         await runtime.llm.complete(
                             context.messages, max_tokens=settings.llm_max_tokens
@@ -281,7 +309,8 @@ def create_app(
         try:
             with anyio.fail_after(10):
                 # Independent of model-work limiter; health shouldn't queue behind inference.
-                checks = await anyio.to_thread.run_sync(runtime.backend.health)
+                with span("health"):
+                    checks = await anyio.to_thread.run_sync(runtime.backend.health)
                 await anyio.lowlevel.checkpoint()
             ready = "unavailable" not in checks.values()
             return JSONResponse(

@@ -6,6 +6,7 @@ import sys
 from datetime import UTC, datetime
 
 from agentic_rag.core.config import LogLevel
+from agentic_rag.observability.tracing import correlation
 
 
 class JsonFormatter(logging.Formatter):
@@ -21,6 +22,7 @@ class JsonFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
         fields = getattr(record, "fields", None)
+        payload.update(correlation())
         if fields is not None:
             payload["fields"] = fields
         if record.exc_info:

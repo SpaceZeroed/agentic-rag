@@ -342,9 +342,9 @@ docs/
 
 Start with [architecture](docs/architecture.md), then the
 [roadmap](docs/roadmap.md) and [interview notes](docs/interview_notes.md).
-Stages 0–9 are implemented. Stage 9 adds a stdio MCP calculator server and a
-contract-checked client consumed by the agent; learning discussion is pending.
-The existing Stage 10 evaluation runner remains partial Stage 10 work.
+Stages 0–10 and their learning discussions are complete. Stage 11 adds explicit
+request tracing, process metrics and an optional Langfuse adapter. Local and SDK
+and live Langfuse delivery checks passed; the Stage 11 discussion remains pending.
 
 To continue in a new chat, read the [conversation handoff](docs/handoff.md) and
 the [original project brief](docs/project_brief.md). They preserve the working
@@ -476,3 +476,51 @@ Historical local traces were reviewed retrospectively by the assistant: natural
 selection/arguments 15/15 proposals, unnecessary 4/15; controlled live selection/
 arguments 9/12, unnecessary 4/12. These are development-set judgments, not held-out
 reliability, and include proposed calls blocked before execution. No new paid runs.
+
+## Observability (Stage 11)
+
+Enable local content-free spans, correlation headers and process metrics:
+
+```bash
+RAG_OBSERVABILITY_ENABLED=true UV_CACHE_DIR=/tmp/retrieval-proj-uv-cache \
+  uv run --no-sync uvicorn agentic_rag.api.app:create_app --factory \
+  --host 127.0.0.1 --port 8001 --log-config config/logging.json
+```
+
+`X-Trace-ID` correlates requests with JSON logs. `/metrics` exposes duration
+histograms, known token totals and unknown-usage counts. Streaming spans include
+body generation and disconnect; an SSE failure can be an error trace with HTTP 200.
+No prompts, source text, tool arguments, answers or exception messages enter spans.
+The logging config enables application INFO events; access logs are disabled.
+
+Optional Langfuse export uses `RAG_LANGFUSE_ENABLED=true` plus explicit
+`RAG_LANGFUSE_BASE_URL`, `RAG_LANGFUSE_PUBLIC_KEY`, `RAG_LANGFUSE_SECRET_KEY`.
+Both features default off. Langfuse SDK 4.15.4 is lock-pinned, with a dedicated
+OTEL provider and manual observations. SDK export and local Langfuse 4.38.0
+ingestion are verified: three traces, 14 observations, parentage and error levels.
+Login and the trace page return HTTP200. No paid calls were made.
+
+Offline complete-flow demo (real BM25, fixture reranker and fake models):
+
+```bash
+UV_CACHE_DIR=/tmp/retrieval-proj-uv-cache uv run --no-sync python \
+  -m agentic_rag.observability.demo --output artifacts/observability_NEW
+```
+
+Writes spans, request IDs and metrics to a fresh directory, without databases or
+external requests. Metrics are per process, reset on restart, and do not expose
+trace IDs as labels. See [observability guide](docs/observability.md) for scope,
+reproduction and current server-validation limits.
+
+Start the separate local Langfuse stack (credentials are generated once, ignored by Git):
+
+```bash
+python3 scripts/init_langfuse.py
+docker compose --env-file .env.langfuse -f compose.langfuse.yaml up -d
+```
+
+Open http://localhost:3000, log in as `local@example.com`, using `LF_LOGIN_PASSWORD`
+from `.env.langfuse`. Existing `.env` and RAG volumes are preserved. To enable API
+export, add `--env-file .env.langfuse` to the Uvicorn command above. Verify the
+server with `scripts/check_langfuse.py --output artifacts/langfuse_server_NEW` through
+`uv run --no-sync`; it uses fixture models and Observations API v2, without paid calls.

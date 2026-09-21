@@ -12,6 +12,8 @@ from pydantic import ValidationError
 from agentic_rag.agents.models import AgentLimits, AgentResult, CitationFailure
 from agentic_rag.llm.base import Completion, LLMError
 from agentic_rag.llm.tool_client import ToolCall, ToolLLM, ToolTurn
+from agentic_rag.observability.llm import TracedToolLLM
+from agentic_rag.observability.tracing import span
 from agentic_rag.rag.context import Citation
 from agentic_rag.tools.calculator import CalculationError, calculate
 from agentic_rag.tools.models import (
@@ -96,7 +98,7 @@ class Agent:
         provider: Literal["fake", "compatible"] = "fake",
         calculator: Calculator | None = None,
     ) -> None:
-        self.llm = llm
+        self.llm = TracedToolLLM(llm)
         self.backend = backend
         self.limits = limits or AgentLimits()
         self.provider = provider
@@ -116,6 +118,19 @@ class Agent:
         self.graph = builder.compile()
 
     async def run(self, query: str) -> AgentResult:
+        with span("agent.run") as current:
+            result = await self._run(query)
+            current.set(
+                outcome=result.status,
+                model_calls=result.model_calls,
+                tool_calls=result.tool_calls,
+                repair_attempts=result.repair_attempts,
+            )
+            if result.error:
+                current.fail(result.error)
+            return result
+
+    async def _run(self, query: str) -> AgentResult:
         if not query.strip() or len(query) > 8000:
             raise ValueError("Query must be nonempty and at most 8000 characters")
         initial: AgentState = {
@@ -336,9 +351,16 @@ class Agent:
         messages = list(state["messages"])
         for call in calls:
             await anyio.lowlevel.checkpoint()
-            observation, signature, added = await self._execute(
-                call, observations, signatures, sources
-            )
+            with span("tool.execute") as current:
+                current.set(
+                    tool=call.function.name if call.function.name in TOOL_INPUTS else "unknown"
+                )
+                observation, signature, added = await self._execute(
+                    call, observations, signatures, sources
+                )
+                current.set(cached=observation.cached)
+                if observation.error:
+                    current.fail(observation.error)
             observations.append(observation)
             signatures.append(signature)
             sources.extend(added)

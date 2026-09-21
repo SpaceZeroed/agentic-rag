@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "json": {"()": "agentic_rag.core.logging.JsonFormatter"}
+  },
+  "handlers": {
+    "stderr": {
+      "class": "logging.StreamHandler",
+      "stream": "ext://sys.stderr",
+      "formatter": "json"
+    }
+  },
+  "root": {"level": "WARNING", "handlers": ["stderr"]},
+  "loggers": {
+    "agentic_rag": {"level": "INFO", "handlers": ["stderr"], "propagate": false},
+    "uvicorn": {"level": "INFO", "handlers": ["stderr"], "propagate": false},
+    "uvicorn.error": {"level": "INFO", "handlers": [], "propagate": true},
+    "uvicorn.access": {"handlers": [], "propagate": false}
+  }
+}
