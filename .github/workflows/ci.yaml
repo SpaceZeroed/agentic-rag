@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "0.12.10"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+      - run: uv run --no-sync mypy src tests scripts
+      - run: uv run --no-sync pytest
+      - run: uv build --no-sources
+
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: rag_local
+          POSTGRES_DB: rag
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U rag -d rag"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+      qdrant:
+        image: qdrant/qdrant:v1.17.0
+        ports:
+          - 6333:6333
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "0.12.10"
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --locked
+      - name: Wait for Qdrant
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:6333/readyz; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Real database integration
+        run: >-
+          uv run --no-sync pytest tests/integration
+          --postgres-url=postgresql+psycopg://rag:rag_local@127.0.0.1:55432/rag
+          --qdrant-url=http://127.0.0.1:6333
+      - name: Build and start deployment
+        run: docker compose -f compose.deploy.yaml up -d --build --wait --wait-timeout 120
+      - name: Restart and recovery smoke test (fake model)
+        run: uv run --no-sync python scripts/check_deployment.py --output artifacts/ci-deployment.json
+      - name: Deployment diagnostics
+        if: failure()
+        run: docker compose -f compose.deploy.yaml logs --no-color --tail 100
+      - name: Stop test deployment
+        if: always()
+        run: docker compose -f compose.deploy.yaml down

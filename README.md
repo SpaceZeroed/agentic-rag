@@ -1,543 +1,151 @@
 # Agentic RAG for ML/LLM documentation
 
-A Python engineering and learning project for an assistant that answers questions
-about ML papers and technical documentation using traceable evidence. The target
-system combines retrieval, cited generation, a single tool-using agent, evaluation,
-and local model inference.
+A Python project for answering technical questions using retrieved evidence and
+validated citations. It combines document ingestion, hybrid retrieval, optional
+CPU reranking, a bounded tool-using agent, MCP, evaluation and request tracing.
 
-**Current status: Stage 8 — bounded tool-using agent.** Markdown/TXT ingestion retains canonical
-revisions in PostgreSQL; dense/BM25/hybrid retrieval supports optional CPU reranking.
-`ask` builds a bounded context and returns a fake or compatible LLM answer with
-validated chunk citations. The default fake needs no inference server. A versioned evaluation set measures
-retrieval/context and exports answers for human semantic review. A real Qwen/Haiku API comparison and explicitly labeled assistant review are available;
-independent human evaluation remains pending. FastAPI exposes document upload, queries,
-health checks and SSE with provisional deltas and validated final answers. A single
-LangGraph agent selects document search, bounded arithmetic, corpus metadata lookup,
-or a direct answer through `POST /agent`. Agent mechanics are tested with fake/mocked
-models. Four real Qwen smoke scenarios exercised tool calling: three API results were
-accepted, but one accepted answer contained an unsupported paper title; one other
-answer was rejected for missing citations. These are development checks, not an
-agent-quality benchmark; see [results](docs/results.md).
+**Status:** stages 0–13 implemented; Stage 14 adds CI and documentation polish.
+Self-hosted vLLM/GPU inference is deferred. The deployed baseline uses BM25 and
+an external compatible LLM API; the default smoke-test mode explicitly uses a
+fake model. Local verification is documented below; a hosted GitHub Actions run
+is not yet verified. This is a learning project with measured development results,
+not an independently validated production service.
 
-See the Russian guides for [ingestion](docs/ingestion.md),
-[dense retrieval](docs/dense_retrieval.md) and [BM25/hybrid](docs/sparse_hybrid.md), including consistency, evaluation and
-reproduction commands. The first dense run measured Recall@5 = 0.9792 and
-MRR@5 = 0.8438 on **10 short authored notes / 20 chunks / 24 EN+RU questions**.
-This is a development smoke set with pending human label review, not held-out
-quality evidence; [full results and limitations](docs/results.md).
+```mermaid
+flowchart LR
+    Client --> API[FastAPI: documents / query / agent]
+    API --> Agent[Bounded LangGraph agent]
+    API --> Retrieval[BM25 / dense / hybrid + optional reranker]
+    Agent --> Retrieval
+    Agent --> Tools[Catalog + MCP calculator]
+    Retrieval --> PG[(PostgreSQL documents and revisions)]
+    Retrieval --> Qdrant[(Qdrant vectors)]
+    API --> LLM[External LLM API]
+    Agent --> LLM
+    API --> Tracing[JSON logs / metrics / optional Langfuse]
+```
 
-## Run locally
+## Run the complete local stack
 
-Prerequisites: Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-Python metadata permits 3.12+; the development baseline in `.python-version` is 3.12.
-Only the interpreter listed in [results](docs/results.md) has been verified so far.
+Requires Docker Compose v2. From a fresh checkout:
 
-From the project root:
+```bash
+docker compose -f compose.deploy.yaml up -d --build --wait --wait-timeout 120
+curl --fail http://localhost:8002/ready
+```
+
+Open http://localhost:8002/docs to ingest a document and query it. This creates
+an isolated `retrieval-deploy` project with its own PostgreSQL/Qdrant volumes.
+The default response uses a labelled fake generator; it does not contact an LLM.
+A one-shot migration must succeed before the non-root API starts.
+
+To enable the external model, copy `.env.example` to `.env` and configure
+`RAG_LLM_BASE_URL`, `RAG_LLM_MODEL`, `RAG_LLM_API_KEY` and, if supported,
+`RAG_LLM_REASONING_ENABLED`. Never commit `.env`. Then run:
+
+```bash
+RAG_DEPLOY_LLM_PROVIDER=compatible docker compose -f compose.deploy.yaml up -d --wait
+```
+
+This lean image supports BM25 without downloading embedding/reranking models.
+Dense/hybrid retrieval is available in the Python application with optional
+model dependencies; it is not enabled in this image. The LLM is always separate.
+See [deployment guide](deployment/README.md) for configuration, probes, upgrades,
+persistence, recovery commands and limitations. Stop without deleting data:
+
+```bash
+docker compose -f compose.deploy.yaml stop
+```
+
+## Python development
+
+The tested baseline is Python 3.12 with uv 0.12.10. The package declares Python
+3.12+, but CI currently exercises only 3.12. Install locked dependencies:
 
 ```bash
 uv sync --locked
-uv run --locked agentic-rag
+uv run --no-sync agentic-rag --help
+uv run --no-sync agentic-rag
 ```
 
-The CLI emits one JSON line to **stderr**, with `message="application_ready"`,
-and exits with status 0. It is a startup check, not a running web server.
-An equivalent command is `uv run --locked python -m agentic_rag`.
+The bare CLI is a startup check that logs `application_ready` and exits. It does
+not start a web server. Most tests use fake/mocked models and need no API key.
+For optional local embedding/reranking work, use `uv sync --locked --extra embeddings`.
+After installing extras, use `uv run --no-sync` so ordinary runs do not prune them.
+Model downloads, GPU access and paid API evaluations are not prerequisites for CI.
 
-Optionally create `.env` by copying `.env.example` and adjust the values. No
-configuration file, GPU, account, API key, network service, or Docker daemon is
-needed for startup, text preview, or autonomous tests after dependencies are installed.
+The original `compose.yaml` is a development database stack with localhost ports
+55432/6333. It is separate from `compose.deploy.yaml` and its data volumes.
 
-```bash
-RAG_ENVIRONMENT=test RAG_LOG_LEVEL=DEBUG uv run --locked agentic-rag
-```
+## API and execution contracts
 
-The inline environment syntax above is for Bash and similar shells.
+- `POST /documents`: validated Markdown/TXT ingestion with canonical revisions.
+- `POST /query`: retrieval and cited answers; optional SSE streaming with provisional
+  deltas and a validated terminal `result`, or an `error` event.
+- `POST /agent`: bounded search, calculator and catalog tool execution, or direct answers.
+- `GET /live`: the process responds. `GET /ready` (also `/health`): required backend
+  databases are reachable. External LLM availability is not inferred from this probe.
+- `GET /metrics`: process-local metrics when observability is enabled. Trace IDs
+  belong in logs/spans, not metric labels. Metrics reset on process restart.
 
-## HTTP API
+Agent call/prompt/output limits, tool policy checks and bounded parsing constrain
+execution; they do not establish semantic correctness of all answers. MCP
+capability discovery is filtered by local policy. Streaming HTTP 200 alone is
+not proof of a successfully completed answer.
 
-With PostgreSQL running and the existing `.env` configured:
+## Reproducible evidence
 
-```bash
-uv sync --locked --extra embeddings
-uv run --locked --extra embeddings agentic-rag db-upgrade
-RAG_API_LLM_PROVIDER=compatible uv run --locked --extra embeddings uvicorn \
-  agentic_rag.api.app:create_app --factory --host 127.0.0.1 --port 8001
-```
-
-Use `RAG_API_LLM_PROVIDER=fake` for local checks without paid generation.
-The API defaults to BM25; dense/hybrid and reranking are server settings.
-Swagger UI: http://127.0.0.1:8001/docs. No key needs to be copied out of `.env`.
-
-```bash
-curl -sS http://127.0.0.1:8001/health
-curl -sS http://127.0.0.1:8001/documents -H 'Content-Type: application/json' \
-  -d '{"filename":"cache.md","source_uri":"https://example.org/cache","content":"PagedAttention allocates KV cache in blocks."}'
-curl -N http://127.0.0.1:8001/query -H 'Content-Type: application/json' \
-  -d '{"query":"How does PagedAttention allocate KV cache?","stream":true}'
-```
-
-SSE deltas are drafts: only `result` is a validated answer. On `error` or missing
-`result`, discard the draft. The local API has no authentication or tenant isolation.
-See the [Russian API guide](docs/api.md) for contracts, lifecycle, cancellation,
-indexing retries, settings and tests.
-
-## Bounded agent
-
-Start the API with `RAG_API_LLM_PROVIDER=fake` for these offline model fixtures:
-
-```bash
-curl -sS http://127.0.0.1:8001/agent -H 'Content-Type: application/json' \
-  -d '{"query":"/calc 6 / 8 * 100"}'
-curl -sS http://127.0.0.1:8001/agent -H 'Content-Type: application/json' \
-  -d '{"query":"/catalog"}'
-curl -sS http://127.0.0.1:8001/agent -H 'Content-Type: application/json' \
-  -d '{"query":"/search PagedAttention"}'
-```
-
-Fake routing uses explicit commands and marks its output as a fixture. Search and
-catalog still use real storage. Compatible mode accepts natural-language questions
-and uses the configured model's `tools`/`tool_calls` support; one agent request can
-make multiple paid LLM calls. There is no automatic fake fallback.
-
-Responses expose status, basis (`model` or `tools`), observations, source snapshots,
-model/tool counts and available usage. C-markers refer to document passages;
-T-markers refer to calculator/catalog observations. Valid references do not prove
-semantic correctness. Budgets bound the loop; tool errors can be observations for
-model correction. A citation-validation failure permits one answer-repair call
-within the same model-call, prompt and deadline budgets, with tools disabled.
-The correction reports the specific structural errors (missing, malformed, or
-unavailable references), describes the available evidence types, and asks the model
-to cite supported claims and remove unsupported ones. These diagnostics do not
-check semantic entailment. In one controlled live replay of the same failed answer,
-the more specific correction produced only an appended `[T1]` after the closing
-question. This passed structural validation but did not follow the requested
-per-item citation placement; reliable claim-level attribution remains unverified.
-`citation_failures` and `repair_attempts` retain the initial failure even after a
-successful repair; a second invalid answer is rejected. One real Qwen correction
-succeeded using a replayed failed answer and frozen catalog snapshot. A separate
-fresh catalog run failed before repair on malformed tool arguments followed by a
-provider HTTP 400. This is not a measured repair success rate.
-Malformed JSON tool arguments now reject the entire proposed batch before execution.
-The exact rejected proposal is retained as ordinary text rather than native tool-call
-history; the model can resubmit valid calls within the existing budgets. Observations
-record `invalid_arguments` and `batch_rejected` for unexecuted siblings. In one live
-continuation of the recorded malformed call, the provider accepted the new history
-(HTTP 200). Qwen chose a partial catalog answer rather than a corrected tool call,
-then repeated its uncited answer during citation repair; the API rejected it with
-`invalid_citations`. Tool-call correction is covered locally, not yet demonstrated live.
-See [the agent guide](docs/agent.md) and [ADR 0011](docs/adr/0011-bounded-agent.md).
-
-The [agent development set](benchmarks/agent_v1/README.md) defines 14 fixed cases
-(10 natural tasks and 4 controlled fault scenarios), an isolated ten-note corpus,
-and separate criteria for task completion, claim support, citation placement and
-failure handling. `scripts/evaluate_agent.py` validates the corpus, runs isolated
-BM25/catalog scenarios with fault injection, and writes reports plus an unscored
-review. Its default mode only validates; live mode requires explicit case selection
-and a new-call ceiling. All 14 development cases were attempted across two live
-runs: natural cases had 9 answers and 1 limit stop; controlled cases had 2 answers
-and 2 limit stops. Assistant review also found partial citation placement and a
-source overstatement. Details and limitations are in the development-set guide.
-
-## Ingest a document
-
-Preview requires no database:
-
-```bash
-uv run --locked agentic-rag preview examples/ingestion_demo.md --max-chars 300 --overlap 50
-```
-
-Start local PostgreSQL, migrate explicitly, and ingest:
-
-```bash
-docker compose up -d --wait postgres
-export RAG_DATABASE_URL='postgresql+psycopg://rag:rag_local@127.0.0.1:55432/rag'
-uv run --locked agentic-rag db-upgrade
-uv run --locked agentic-rag ingest examples/ingestion_demo.md --max-chars 300 --overlap 50
-```
-
-Repeat the ingestion command to get `unchanged`. Use the returned UUIDs with
-`agentic-rag show DOCUMENT_UUID` or
-`agentic-rag show DOCUMENT_UUID --revision REVISION_UUID`, prefixed by `uv run --locked`.
-These commands emit result JSON to stdout and operational logs to stderr.
-Source identity defaults to a resolved file URI. Use `--source-uri` for an explicit
-portable source identity; no remote URL is fetched. Old revisions remain readable.
-The sample is repository-authored demonstration text, not an evaluation dataset.
-
-Compose exposes PostgreSQL on loopback port 55432 and persists it in a named volume.
-Its sample password is for local development. `docker compose stop postgres` stops
-the service while retaining data. The application URL is optional for startup and
-preview, and required for `db-upgrade`, `ingest`, and `show`.
-
-## Dense search on CPU
-
-```bash
-uv sync --locked --extra embeddings
-docker compose up -d postgres qdrant
-export RAG_DATABASE_URL='postgresql+psycopg://rag:rag_local@127.0.0.1:55432/rag'
-uv run --locked --extra embeddings agentic-rag db-upgrade
-uv run --locked --extra embeddings agentic-rag model-check
-uv run --locked --extra embeddings agentic-rag evaluate benchmarks/dense_v1/dataset.json \
-  --collection-prefix rag_dense_v1 --output artifacts/dense-v1.json
-uv run --locked --extra embeddings agentic-rag search "How does LoRA reduce training memory?" \
-  --collection-prefix rag_dense_v1 --k 3
-```
-
-First model use downloads pinned Hugging Face weights into `data/models`.
-Then `RAG_MODEL_LOCAL_FILES_ONLY=true` enables offline model loading. Keep
-`--extra embeddings` on uv commands while using the model; ordinary sync/run
-commands may remove optional model packages. Normal tests need neither weights
-nor Torch. Qdrant is bound to loopback port 6333 and retains a named volume.
-Use `index` after ingesting your own documents; `evaluate` ingests/indexes its fixed
-set automatically. See the [guide](docs/dense_retrieval.md) for filters and real
-PostgreSQL/Qdrant/model tests.
-
-## BM25 and hybrid search
-
-BM25 uses current PostgreSQL chunks and requires no model or Qdrant. Hybrid uses
-both dense and BM25 ranks with reciprocal rank fusion. Search defaults to dense.
-
-```bash
-uv run --locked --extra embeddings agentic-rag search "KV cache blocks" --mode bm25 --k 5
-uv run --locked --extra embeddings agentic-rag search "KV cache blocks" \
-  --mode hybrid --collection-prefix rag_dense_v1 --candidate-k 20 --k 5
-uv run --locked --extra embeddings agentic-rag evaluate benchmarks/dense_v1/dataset.json \
-  --compare --collection-prefix rag_dense_v1 --output artifacts/comparison.json
-```
-
-On the unchanged development set, hybrid MRR@5 was 0.8993 versus dense 0.8438;
-Recall@5 remained 0.9792. BM25 Recall@5 was 0.7500. These are small-set observations,
-not general quality guarantees. The current lexical index is rebuilt on each query;
-this cost is included in reported latency. See [results](docs/results.md).
-
-## Configuration and logs
-
-| Environment variable | Default | Accepted values / meaning |
+| Area | Observed result / scope | Evidence |
 | --- | --- | --- |
-| `RAG_ENVIRONMENT` | `local` | `local`, `test`, `production` |
-| `RAG_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `RAG_DATA_DIR` | `data` | A `pathlib.Path`; relative paths use the working directory |
-| `RAG_DATABASE_URL` | unset | PostgreSQL URL using `postgresql+psycopg://`; stored as `SecretStr` |
+| Retrieval | Authored development set: 10 notes, 20 chunks, 24 EN/RU questions; not held-out quality | [Dataset and commands](benchmarks/dense_v1/README.md), [dense/BM25/hybrid report](benchmarks/dense_v1/results/comparison_cpu.json) |
+| Reranking | CPU experiments on the same small set; inspect quality and latency together | [Isolated report](benchmarks/dense_v1/results/reranking_cpu_isolated.json) |
+| RAG generation | Frozen-context Qwen/Haiku comparison; scores include explicitly labelled assistant review | [Comparison methodology and results](benchmarks/rag_v1/results/model_comparison_v1/README.md) |
+| Agent evaluation | Versioned scenarios; proposals, executions and replays must remain distinct | [Cases](benchmarks/agent_v1/README.md), [review policy](benchmarks/agent_v1/tool_review_policy.md) |
+| API inference | 24 measured calls + 6 warmups; all succeeded. Client first-text/chunk timing, not server token timing | [Methodology](benchmarks/inference_v1/README.md), [measured table](benchmarks/inference_v1/results.md) |
+| Deployment | Startup, migrations, restart persistence, database outage/recovery and two live LLM requests | [Verification](deployment/results.md) |
 
-Settings are immutable after validation. Construction does not create directories.
-`.env` is optional and is read from the current working directory, not searched
-upward. Values use this precedence: explicit constructor arguments, environment
-variables, `.env`, defaults. Unknown `.env` keys are ignored to allow a shared
-development file; this also means a misspelled key can be silently ignored. See
-[Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/).
+Small experiments do not establish production p95, maximum throughput, a safe
+concurrency limit or general answer quality. Raw local artifacts and working
+notes under `docs/` are not distributed; the linked tracked reports state the
+available evidence and its limits. No synthetic latency is presented as a live
+measurement. The [CI guide](deployment/ci.md) distinguishes local verification
+from an actual hosted workflow run.
 
-Invalid recognized values, such as `RAG_LOG_LEVEL=VERBOSE`, produce a JSON error
-and exit code 2. Error events identify the field and validation error type without
-echoing the invalid value. At `WARNING` and above, successful startup is quiet.
-
-Logs contain a UTC timestamp, level, logger, and message. Callers can add structured
-context with `extra={"fields": {"document_id": "..."}}`. Custom fields are nested
-so they cannot replace the standard fields. Exceptions retain their traceback.
-The formatter escapes newlines to preserve one JSON event per line. Arbitrary
-objects fall back to their string representation; use JSON-native values when
-their types matter. Messages and exception text are not automatically redacted:
-call sites must choose what is appropriate to log.
-
-`configure_logging()` replaces root handlers and belongs at process startup.
-Importing application modules does not configure logging or load settings.
-
-## Verify
+## Checks
 
 ```bash
-uv run --locked ruff check .
-uv run --locked ruff format --check .
-uv run --locked mypy
-uv run --locked pytest
-uv build
+uv run --no-sync ruff check .
+uv run --no-sync ruff format --check .
+uv run --no-sync mypy src tests scripts
+uv run --no-sync pytest
+uv build --no-sources
 ```
 
-By default, PostgreSQL tests skip explicitly. Run them against the local service:
+Real database checks (each PostgreSQL test gets an isolated schema; Qdrant tests
+use separate collections):
 
 ```bash
-uv run --locked pytest -m postgres --postgres-url='postgresql+psycopg://rag:rag_local@127.0.0.1:55432/rag'
+uv run --no-sync pytest tests/integration \
+  --postgres-url=postgresql+psycopg://rag:rag_local@127.0.0.1:55432/rag \
+  --qdrant-url=http://127.0.0.1:6333
 ```
 
-Each test uses its own temporary schema and real Alembic migrations. Tests verify
-round trips, repeat ingestion, retained revisions, concurrent writes, transaction
-rollback, and CLI persistence across processes. Existing application tables are
-not cleared. Qdrant/model tests also skip without their explicit connection/cache options.
+Without database URLs the corresponding tests explicitly skip. The two real CPU
+model tests also skip unless given downloaded caches through `--model-cache` and
+`--reranker-cache`. These skips are not successful model integration tests.
 
-`uv sync --locked` includes the development dependency group. `--locked` checks
-that project metadata matches the lockfile and refuses to update a stale lockfile.
-Use `uv add PACKAGE` or `uv add --dev PACKAGE` for deliberate dependency changes;
-review and commit both `pyproject.toml` and `uv.lock`. See
-[uv's locking and syncing guide](https://docs.astral.sh/uv/concepts/projects/sync/).
-
-Tests cover configuration parsing and precedence, structured log output,
-tracebacks, exit codes, logging reconfiguration, and both installed entry points
-from outside the repository. The fixture clears `RAG_*` overrides and uses a
-temporary working directory so your local `.env` cannot affect assertions.
-There is no `sys.path` or `PYTHONPATH` patch to bypass installation.
-
-## Docker development basics
-
-```bash
-docker build -t agentic-rag:dev .
-docker run --rm agentic-rag:dev
-docker run --rm agentic-rag:dev pytest
-```
-
-The development image includes quality tools and runs as a non-root user. Its
-default command performs the same startup check and exits. `.dockerignore`
-excludes local credentials, virtual environments, and generated data. To override
-settings, pass Docker environment options, for example `-e RAG_ENVIRONMENT=test`.
-
-Stage 0 Docker was verified on 2026-09-14: the image built, the startup command exited 0,
-and all 17 tests plus Ruff and mypy passed inside a non-root container with
-networking disabled. The initial WSL integration limitation no longer reproduces.
-See [the verification record](docs/results.md) for commands and environment details.
-
-This is a development image. The Python base tag is mutable; pin image digests
-when we work on deployment reproducibility. Compose runs PostgreSQL and Qdrant;
-the full application deployment belongs to later milestones. The image
-includes the sample document, so `docker run --rm agentic-rag:dev preview
-examples/ingestion_demo.md` works without host mounts. See the verification record
-for Stage 1 results and the guide for database addressing inside containers.
-
-## Repository
-
-```text
-pyproject.toml              # Build metadata, dependencies, tool configuration
-uv.lock                    # Exact dependency resolution
-.python-version            # Python development baseline
-.env.example               # Safe local configuration example
-Dockerfile / .dockerignore  # Development container
-compose.yaml               # Local PostgreSQL and Qdrant with persistent volumes
-examples/                  # Repository-authored demonstration document
-benchmarks/                # Fixed development corpus, labels, measured report
-src/agentic_rag/
-    __init__.py
-    __main__.py             # python -m entry point
-    cli.py                  # Startup composition and exit status
-    core/
-        __init__.py
-        config.py           # Validated settings
-        logging.py          # JSON formatter and startup configuration
-    ingestion/              # Parsing, explicit chunking, deterministic identities
-    storage/                # SQLAlchemy adapter and packaged Alembic migrations
-    embeddings/             # Provider contract and explicit CPU E5 pooling
-    retrieval/              # Dense workflow and Qdrant adapter
-    reranking/              # Optional CPU cross-encoder
-    llm/                    # Fake/compatible generation and tool-calling adapters
-    rag/                    # Context packing and citation validation
-    api/                    # FastAPI entry point and resource lifecycle
-    agents/                 # Bounded LangGraph model/tools/finish loop
-    tools/                  # Strict tool schemas and bounded arithmetic
-    evaluation/             # Fixed-label loader and explicit ranking metrics
-tests/
-    conftest.py             # Isolated environment and working directory
-    unit/                  # Configuration and logging behavior
-    integration/           # Installed CLI behavior in separate processes
-docs/
-    architecture.md        # Requirements, diagram, boundaries, decisions, risks
-    roadmap.md             # Stage deliverables and verification gates
-    adr/                   # Architectural decision records
-    results.md             # Actual measurements and reproducibility information
-    interview_notes.md     # Concepts, tradeoffs, and self-check questions
-```
-
-Start with [architecture](docs/architecture.md), then the
-[roadmap](docs/roadmap.md) and [interview notes](docs/interview_notes.md).
-Stages 0–10 and their learning discussions are complete. Stage 11 adds explicit
-request tracing, process metrics and an optional Langfuse adapter. Local and SDK
-and live Langfuse delivery checks passed; the Stage 11 discussion remains pending.
-
-To continue in a new chat, read the [conversation handoff](docs/handoff.md) and
-the [original project brief](docs/project_brief.md). They preserve the working
-style, completed work, verification results, limitations, and stopping point.
-
-## Stage 4: optional CPU reranking
-
-`search --mode hybrid --rerank --candidate-k 20 --rerank-k 20 --k 5` adds a pinned
-multilingual cross-encoder after retrieval. `evaluate DATASET --rerank --output PATH`
-compares the same hybrid candidates before/after reranking. Use the existing
-`--extra embeddings`; models run locally on CPU. See [architecture, model choice,
-commands and limits](docs/reranking.md) and [measurements](docs/results.md).
-
-## Basic RAG (Stage 5)
-
-With PostgreSQL configured and documents ingested:
-
-```bash
-uv run --locked --extra embeddings agentic-rag ask 'PagedAttention' --mode bm25 --llm fake
-```
-
-BM25 + fake needs neither Qdrant nor model weights; the embeddings extra preserves
-an existing CPU installation. For the already indexed benchmark:
-
-```bash
-RAG_MODEL_LOCAL_FILES_ONLY=true uv run --locked --extra embeddings agentic-rag ask \
-  'Как PagedAttention управляет KV cache?' --mode hybrid \
-  --collection-prefix rag_dense_v1 --rerank --k 5 --llm fake
-```
-
-`--llm compatible` uses RAG_LLM_BASE_URL (default http://127.0.0.1:8000/v1),
-RAG_LLM_MODEL (required), and optional RAG_LLM_API_KEY. No hosted service is required.
-The HTTP adapter is transport-tested; a real generation server has not been verified.
-
-The output includes answer status, text, citations with exact revision/coordinates,
-and the supplied context. The 24000-byte prompt limit is **not a tokenizer count**;
-RAG_LLM_MAX_TOKENS separately limits generation. Valid citation IDs do not establish
-faithfulness; fake output is explicitly a test excerpt, not a generated answer.
-See the [Russian Stage 5 guide](docs/basic_rag.md) for architecture, failure behavior,
-server requirements and tests, and [ADR 0008](docs/adr/0008-basic-rag.md).
-
-## RAG evaluation (Stage 6)
-
-```bash
-uv run --locked --extra embeddings agentic-rag evaluate-rag \
-  benchmarks/rag_v1/dataset.json --mode bm25 --llm fake \
-  --output artifacts/rag_run.json
-uv run --locked --extra embeddings agentic-rag review-rag artifacts/rag_run.json \
-  --output artifacts/rag_review.json
-```
-
-The first command uses configured PostgreSQL and saves/reactivates the fixed dataset
-revisions. Dense/hybrid and optional reranking are also supported. Output paths must
-be new. Reports include every case, actual context, references, answers/errors and
-explicit metric denominators. References never enter the generator prompt.
-
-Ten authored development questions include EN/RU, two-document comparisons and
-unanswerable cases. Fake reports measure retrieval/context, **not answer quality**.
-For a real compatible server use `--llm compatible`, fill the exported human rubric,
-and run `review-rag REPORT --annotations REVIEW --output QUALITY`. Scoring rejects
-fake runs, incomplete annotations and reviews belonging to a different report.
-See [Stage 6 guide](docs/rag_evaluation.md), [ADR 0009](docs/adr/0009-rag-evaluation.md)
-and [measured results](docs/results.md).
-
-
-Current development selection: `qwen/qwen3.6-35b-a3b` through Rus-GPT with
-`RAG_LLM_REASONING_ENABLED=false`, output limit 4096. See the
-[controlled comparison](benchmarks/rag_v1/results/model_comparison_v1/README.md)
-for exact configurations, costs, observed failures and non-independent review limits.
-The reasoning switch is provider-specific and is omitted unless explicitly configured.
-
-## MCP calculator (Stage 9)
-
-The SDK is locked to MCP 2.2.0. Run the real stdio client/server round trip with
-our deterministic fake agent (no database, GPU or paid LLM calls):
-
-```bash
-uv sync --locked --inexact
-uv run --no-sync python -m agentic_rag.mcp.demo '6 / 8 * 100'
-```
-
-The demo starts a child server, discovers `calculate`, verifies its input/output
-schemas, executes the agent and closes the session/process. Expected observation:
-`value: "75.00"`, reference `T1`, status `answered`. Fake output tests wiring, not
-model tool-selection quality. Run the server alone for another MCP host:
-
-```bash
-uv run --no-sync python -m agentic_rag.mcp.server
-```
-
-Server stdout carries MCP JSON-RPC only; it waits for a client. An operator can
-select an external stdio server implementing the same calculator contract:
-
-```bash
-uv run --no-sync python -m agentic_rag.mcp.demo '40+2' \
-  --server /absolute/path/to/python /absolute/path/to/server.py
-```
-
-`--server` must be last; its command/arguments are trusted operator input, never
-model output. Additional discovered tools are ignored. This is a typed calculator
-adapter, not unrestricted dynamic tool registration. Existing `/agent` API uses
-the local calculator; MCP is injected through `Agent(..., calculator=...)` inside
-`connect_calculator(...)` in this stage. No automatic remote-to-local fallback.
-
-Defaults: 5-second operation/discovery deadlines, 4 discovery pages, 32 tools,
-32 KiB discovery and 4 KiB result acceptance limits. SDK shutdown has its own grace
-period; deadlines are not total process-lifetime guarantees. Payload checks happen
-after SDK decoding, so these are not wire/memory limits or OS process isolation.
-Only run trusted server executables. Discovery/schema checks do not prove a remote
-calculation correct. Remote tool errors become sanitized `tool_unavailable`
-observations; cancellation propagates. No client retries; agent limits still apply.
-
-```bash
-uv run --no-sync pytest tests/unit/test_mcp.py tests/integration/test_mcp_stdio.py
-```
-
-The integration suite uses both the application server and an independent SDK
-fixture in real subprocesses, including cancellation and silent-startup handling.
-See [MCP design and learning guide](docs/mcp.md) for protocol roles and limitations.
-
-## Agent tool-use review (Stage 10)
-
-The offline `scripts/review_agent.py` command creates unscored tool-use templates
-and aggregates completed hash-bound reviews. It separates tool selection,
-semantic arguments, unnecessary proposals, completion, steps and latency, with
-live/replayed decisions and natural/controlled cases kept separate.
-See [policy and commands](benchmarks/agent_v1/tool_review_policy.md).
-Historical local traces were reviewed retrospectively by the assistant: natural
-selection/arguments 15/15 proposals, unnecessary 4/15; controlled live selection/
-arguments 9/12, unnecessary 4/12. These are development-set judgments, not held-out
-reliability, and include proposed calls blocked before execution. No new paid runs.
-
-## Observability (Stage 11)
-
-Enable local content-free spans, correlation headers and process metrics:
-
-```bash
-RAG_OBSERVABILITY_ENABLED=true UV_CACHE_DIR=/tmp/retrieval-proj-uv-cache \
-  uv run --no-sync uvicorn agentic_rag.api.app:create_app --factory \
-  --host 127.0.0.1 --port 8001 --log-config config/logging.json
-```
-
-`X-Trace-ID` correlates requests with JSON logs. `/metrics` exposes duration
-histograms, known token totals and unknown-usage counts. Streaming spans include
-body generation and disconnect; an SSE failure can be an error trace with HTTP 200.
-No prompts, source text, tool arguments, answers or exception messages enter spans.
-The logging config enables application INFO events; access logs are disabled.
-
-Optional Langfuse export uses `RAG_LANGFUSE_ENABLED=true` plus explicit
-`RAG_LANGFUSE_BASE_URL`, `RAG_LANGFUSE_PUBLIC_KEY`, `RAG_LANGFUSE_SECRET_KEY`.
-Both features default off. Langfuse SDK 4.15.4 is lock-pinned, with a dedicated
-OTEL provider and manual observations. SDK export and local Langfuse 4.38.0
-ingestion are verified: three traces, 14 observations, parentage and error levels.
-Login and the trace page return HTTP200. No paid calls were made.
-
-Offline complete-flow demo (real BM25, fixture reranker and fake models):
-
-```bash
-UV_CACHE_DIR=/tmp/retrieval-proj-uv-cache uv run --no-sync python \
-  -m agentic_rag.observability.demo --output artifacts/observability_NEW
-```
-
-Writes spans, request IDs and metrics to a fresh directory, without databases or
-external requests. Metrics are per process, reset on restart, and do not expose
-trace IDs as labels. See [observability guide](docs/observability.md) for scope,
-reproduction and current server-validation limits.
-
-Start the separate local Langfuse stack (credentials are generated once, ignored by Git):
+## Optional Langfuse
 
 ```bash
 python3 scripts/init_langfuse.py
 docker compose --env-file .env.langfuse -f compose.langfuse.yaml up -d
 ```
 
-Open http://localhost:3000, log in as `local@example.com`, using `LF_LOGIN_PASSWORD`
-from `.env.langfuse`. Existing `.env` and RAG volumes are preserved. To enable API
-export, add `--env-file .env.langfuse` to the Uvicorn command above. Verify the
-server with `scripts/check_langfuse.py --output artifacts/langfuse_server_NEW` through
-`uv run --no-sync`; it uses fixture models and Observations API v2, without paid calls.
-
-## Deployment (Stage 13)
-
-Run an isolated API/PostgreSQL/Qdrant stack with fresh persistent volumes:
-
-```bash
-docker compose -f compose.deploy.yaml up -d --build --wait --wait-timeout 120
-```
-
-API: http://localhost:8002/docs. A one-shot migration must succeed before API
-startup. `/live` checks process liveness; `/ready` checks required databases.
-Default BM25 + fake model enables an infrastructure smoke test. To use the LLM
-configured in `.env`, run the same Compose command with
-`RAG_DEPLOY_LLM_PROVIDER=compatible`. No self-hosted inference is needed.
-The dedicated image runs as non-root without dev/embedding dependencies.
-See [deployment and recovery guide](deployment/README.md) for mode limitations,
-persistence, configuration changes, backups and the restart/outage check script.
+This separate stack is available at http://localhost:3000. Login is
+`local@example.com`; the generated password is `LF_LOGIN_PASSWORD` in the ignored
+`.env.langfuse`. The initializer does not overwrite existing credentials.
+Tracing uses explicit spans; prompts, source text, tool arguments and generated
+answers are omitted from those spans. Export failures do not fail user requests.
+The deployment baseline enables local telemetry but leaves Langfuse export off.
+See `scripts/check_langfuse.py` for verification against the local server; it uses
+fixture models and does not make paid LLM calls.
