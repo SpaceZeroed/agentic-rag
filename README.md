@@ -464,3 +464,15 @@ uv run --no-sync pytest tests/unit/test_mcp.py tests/integration/test_mcp_stdio.
 The integration suite uses both the application server and an independent SDK
 fixture in real subprocesses, including cancellation and silent-startup handling.
 See [MCP design and learning guide](docs/mcp.md) for protocol roles and limitations.
+
+## Agent tool-use review (Stage 10)
+
+The offline `scripts/review_agent.py` command creates unscored tool-use templates
+and aggregates completed hash-bound reviews. It separates tool selection,
+semantic arguments, unnecessary proposals, completion, steps and latency, with
+live/replayed decisions and natural/controlled cases kept separate.
+See [policy and commands](benchmarks/agent_v1/tool_review_policy.md).
+Historical local traces were reviewed retrospectively by the assistant: natural
+selection/arguments 15/15 proposals, unnecessary 4/15; controlled live selection/
+arguments 9/12, unnecessary 4/12. These are development-set judgments, not held-out
+reliability, and include proposed calls blocked before execution. No new paid runs.

@@ -210,3 +210,23 @@ independent human review or held-out reliability estimate is claimed.
 Next priority: stop repeated retrieval without new evidence and preserve capacity
 for a valid refusal; also address brittle refusal formatting. Keep this baseline
 unchanged before testing such modifications.
+
+## Stage 10 offline tool-use review (2026-09-21)
+
+Added [tool review policy v1](tool_review_policy.md) and `scripts/review_agent.py`.
+The rubric is retrospective and assistant-reviewed; cases and original reports
+remain unchanged. Local `artifacts/agent_review_20260921/final_summary.json` binds
+both original quality reviews and new per-proposal labels by SHA-256 and records
+the evaluator source hash. No new provider calls were made.
+
+Natural live proposals: selection 15/15, arguments 15/15, unnecessary 4/15.
+Controlled live proposals: selection 9/12, arguments 9/12, unnecessary 4/12.
+Replay proposals: selection 2/2, arguments 1/2, unnecessary 0/2; excluded from live.
+Task-completion full score remains natural 9/10 and controlled 2/4 under the prior
+rubric; this does not imply full claim support or citation placement. Model steps
+average 2.5 / 4.5 and observations 1.4 / 3.25 (natural / controlled).
+Natural latency mean 3.310 s, nearest-rank p50 3.174 s, p95 5.110 s (n=10).
+Controlled latency is split into fresh mean 5.281 s (n=2) and containing replay
+mean 2.584 s (n=2). Descriptive only; not a throughput or production SLO test.
+The calls and missing-evidence failures remain unchanged; evaluation does not
+itself fix the agent. Independent human review is still pending.
