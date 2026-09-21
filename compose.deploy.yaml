@@ -1,0 +1,77 @@
+name: retrieval-deploy
+
+x-app: &app
+  image: retrieval-api:stage13
+  build:
+    context: .
+    dockerfile: Dockerfile.api
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  environment: &environment
+    RAG_DATABASE_URL: postgresql+psycopg://rag:rag_local@postgres:5432/rag
+    RAG_QDRANT_URL: http://qdrant:6333
+    RAG_API_RETRIEVAL_MODE: bm25
+    RAG_API_RERANK: "false"
+    RAG_API_LLM_PROVIDER: ${RAG_DEPLOY_LLM_PROVIDER:-fake}
+    RAG_LLM_BASE_URL: ${RAG_LLM_BASE_URL:-http://127.0.0.1:8000/v1}
+    RAG_LLM_MODEL: ${RAG_LLM_MODEL:-}
+    RAG_LLM_API_KEY: ${RAG_LLM_API_KEY:-}
+    RAG_LLM_REASONING_ENABLED: ${RAG_LLM_REASONING_ENABLED:-false}
+    RAG_LLM_MAX_TOKENS: ${RAG_LLM_MAX_TOKENS:-512}
+    RAG_OBSERVABILITY_ENABLED: "true"
+    RAG_LANGFUSE_ENABLED: "false"
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag_local
+      POSTGRES_DB: rag
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U rag -d rag]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.17.0
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: [agentic-rag, db-upgrade]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:${RAG_DEPLOY_PORT:-8002}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=12).close()"]
+      interval: 15s
+      timeout: 13s
+      start_period: 20s
+      retries: 3
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  qdrant_data:

@@ -303,6 +303,11 @@ def create_app(
             {"error": "client_disconnected"}, status_code=499
         )
 
+    @app.get("/live")
+    async def live() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/ready")
     @app.get("/health")
     async def health(request: Request) -> JSONResponse:
         runtime = cast(Runtime, request.app.state.runtime)

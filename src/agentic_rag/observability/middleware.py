@@ -16,7 +16,7 @@ class TraceRequests:
         with self.tracer.activate(), self.tracer.span("http.request") as request_span:
             route = (
                 scope["path"]
-                if scope["path"] in ("/query", "/agent", "/documents", "/health")
+                if scope["path"] in ("/query", "/agent", "/documents", "/health", "/ready", "/live")
                 else "other"
             )
             method = scope["method"] if scope["method"] in ("POST", "GET") else "other"

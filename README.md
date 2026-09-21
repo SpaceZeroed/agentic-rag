@@ -524,3 +524,20 @@ from `.env.langfuse`. Existing `.env` and RAG volumes are preserved. To enable A
 export, add `--env-file .env.langfuse` to the Uvicorn command above. Verify the
 server with `scripts/check_langfuse.py --output artifacts/langfuse_server_NEW` through
 `uv run --no-sync`; it uses fixture models and Observations API v2, without paid calls.
+
+## Deployment (Stage 13)
+
+Run an isolated API/PostgreSQL/Qdrant stack with fresh persistent volumes:
+
+```bash
+docker compose -f compose.deploy.yaml up -d --build --wait --wait-timeout 120
+```
+
+API: http://localhost:8002/docs. A one-shot migration must succeed before API
+startup. `/live` checks process liveness; `/ready` checks required databases.
+Default BM25 + fake model enables an infrastructure smoke test. To use the LLM
+configured in `.env`, run the same Compose command with
+`RAG_DEPLOY_LLM_PROVIDER=compatible`. No self-hosted inference is needed.
+The dedicated image runs as non-root without dev/embedding dependencies.
+See [deployment and recovery guide](deployment/README.md) for mode limitations,
+persistence, configuration changes, backups and the restart/outage check script.

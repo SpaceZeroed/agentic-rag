@@ -473,6 +473,8 @@ async def test_chunk_work_bound_and_health_failure() -> None:
         health = await client.get("/health")
         assert health.status_code == 503
         assert health.json()["status"] == "degraded"
+        assert (await client.get("/ready")).status_code == 503
+        assert (await client.get("/live")).json() == {"status": "ok"}
 
 
 @pytest.mark.parametrize(
