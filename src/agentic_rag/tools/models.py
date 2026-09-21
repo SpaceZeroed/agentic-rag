@@ -58,6 +58,10 @@ class ToolBackend(Protocol):
     async def catalog(self, arguments: CatalogInput) -> CatalogOutput: ...
 
 
+class Calculator(Protocol):
+    async def calculate(self, arguments: CalculateInput) -> CalculateOutput: ...
+
+
 class Observation(BaseModel):
     """Public execution record; identifiers are assigned by the application."""
 

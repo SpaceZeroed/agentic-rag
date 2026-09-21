@@ -17,6 +17,7 @@ from agentic_rag.tools.calculator import CalculationError, calculate
 from agentic_rag.tools.models import (
     TOOL_INPUTS,
     CalculateInput,
+    Calculator,
     CatalogInput,
     Observation,
     SearchInput,
@@ -93,11 +94,13 @@ class Agent:
         limits: AgentLimits | None = None,
         *,
         provider: Literal["fake", "compatible"] = "fake",
+        calculator: Calculator | None = None,
     ) -> None:
         self.llm = llm
         self.backend = backend
         self.limits = limits or AgentLimits()
         self.provider = provider
+        self.calculator = calculator
         builder = StateGraph(AgentState)
         builder.add_node("model", self._model)
         builder.add_node("tools", self._tools)
@@ -384,7 +387,12 @@ class Agent:
         reference = f"T{len(previous) + 1}"
         try:
             if isinstance(arguments, CalculateInput):
-                data = calculate(arguments).model_dump(mode="json")
+                result = (
+                    await self.calculator.calculate(arguments)
+                    if self.calculator is not None
+                    else calculate(arguments)
+                )
+                data = result.model_dump(mode="json")
             elif isinstance(arguments, CatalogInput):
                 data = (await self.backend.catalog(arguments)).model_dump(mode="json")
             elif isinstance(arguments, SearchInput):

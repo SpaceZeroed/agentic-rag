@@ -130,8 +130,13 @@ See [the agent guide](docs/agent.md) and [ADR 0011](docs/adr/0011-bounded-agent.
 The [agent development set](benchmarks/agent_v1/README.md) defines 14 fixed cases
 (10 natural tasks and 4 controlled fault scenarios), an isolated ten-note corpus,
 and separate criteria for task completion, claim support, citation placement and
-failure handling. Cases and an unscored review template are prepared; a runner and
-paid evaluation results are not yet available.
+failure handling. `scripts/evaluate_agent.py` validates the corpus, runs isolated
+BM25/catalog scenarios with fault injection, and writes reports plus an unscored
+review. Its default mode only validates; live mode requires explicit case selection
+and a new-call ceiling. All 14 development cases were attempted across two live
+runs: natural cases had 9 answers and 1 limit stop; controlled cases had 2 answers
+and 2 limit stops. Assistant review also found partial citation placement and a
+source overstatement. Details and limitations are in the development-set guide.
 
 ## Ingest a document
 
@@ -337,8 +342,9 @@ docs/
 
 Start with [architecture](docs/architecture.md), then the
 [roadmap](docs/roadmap.md) and [interview notes](docs/interview_notes.md).
-Stages 0–8 are implemented. Stage 8 learning discussion is complete; MCP is the next
-stage only after explicit continuation.
+Stages 0–9 are implemented. Stage 9 adds a stdio MCP calculator server and a
+contract-checked client consumed by the agent; learning discussion is pending.
+The existing Stage 10 evaluation runner remains partial Stage 10 work.
 
 To continue in a new chat, read the [conversation handoff](docs/handoff.md) and
 the [original project brief](docs/project_brief.md). They preserve the working
@@ -409,3 +415,52 @@ Current development selection: `qwen/qwen3.6-35b-a3b` through Rus-GPT with
 [controlled comparison](benchmarks/rag_v1/results/model_comparison_v1/README.md)
 for exact configurations, costs, observed failures and non-independent review limits.
 The reasoning switch is provider-specific and is omitted unless explicitly configured.
+
+## MCP calculator (Stage 9)
+
+The SDK is locked to MCP 2.2.0. Run the real stdio client/server round trip with
+our deterministic fake agent (no database, GPU or paid LLM calls):
+
+```bash
+uv sync --locked --inexact
+uv run --no-sync python -m agentic_rag.mcp.demo '6 / 8 * 100'
+```
+
+The demo starts a child server, discovers `calculate`, verifies its input/output
+schemas, executes the agent and closes the session/process. Expected observation:
+`value: "75.00"`, reference `T1`, status `answered`. Fake output tests wiring, not
+model tool-selection quality. Run the server alone for another MCP host:
+
+```bash
+uv run --no-sync python -m agentic_rag.mcp.server
+```
+
+Server stdout carries MCP JSON-RPC only; it waits for a client. An operator can
+select an external stdio server implementing the same calculator contract:
+
+```bash
+uv run --no-sync python -m agentic_rag.mcp.demo '40+2' \
+  --server /absolute/path/to/python /absolute/path/to/server.py
+```
+
+`--server` must be last; its command/arguments are trusted operator input, never
+model output. Additional discovered tools are ignored. This is a typed calculator
+adapter, not unrestricted dynamic tool registration. Existing `/agent` API uses
+the local calculator; MCP is injected through `Agent(..., calculator=...)` inside
+`connect_calculator(...)` in this stage. No automatic remote-to-local fallback.
+
+Defaults: 5-second operation/discovery deadlines, 4 discovery pages, 32 tools,
+32 KiB discovery and 4 KiB result acceptance limits. SDK shutdown has its own grace
+period; deadlines are not total process-lifetime guarantees. Payload checks happen
+after SDK decoding, so these are not wire/memory limits or OS process isolation.
+Only run trusted server executables. Discovery/schema checks do not prove a remote
+calculation correct. Remote tool errors become sanitized `tool_unavailable`
+observations; cancellation propagates. No client retries; agent limits still apply.
+
+```bash
+uv run --no-sync pytest tests/unit/test_mcp.py tests/integration/test_mcp_stdio.py
+```
+
+The integration suite uses both the application server and an independent SDK
+fixture in real subprocesses, including cancellation and silent-startup handling.
+See [MCP design and learning guide](docs/mcp.md) for protocol roles and limitations.
