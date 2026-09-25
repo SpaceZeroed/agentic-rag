@@ -8,7 +8,7 @@ import pytest
 from agentic_rag.evaluation.rag_dataset import load_rag_dataset
 from agentic_rag.evaluation.rag_metrics import evidence_metrics
 from agentic_rag.evaluation.rag_review import Review, review_template, score_review
-from agentic_rag.evaluation.rag_runner import run_rag_evaluation
+from agentic_rag.evaluation.rag_runner import run_offline_bm25_evaluation, run_rag_evaluation
 from agentic_rag.llm.base import Completion, LLMError, Message
 from agentic_rag.llm.fake import FakeLLM
 from agentic_rag.rag.context import build_context
@@ -128,6 +128,15 @@ def test_fake_and_empty_context_do_not_become_quality_measurements() -> None:
     template = Review.model_validate(review_template(report))
     with pytest.raises(ValueError, match="Fake"):
         score_review(report, template)
+
+
+def test_offline_bm25_evaluation_needs_no_external_services() -> None:
+    report: Any = run_offline_bm25_evaluation(DATASET)
+    assert report["config"]["mode"] == "offline_bm25"
+    assert report["config"]["external_services"] is False
+    assert report["errors"] == 0
+    assert report["metrics"]["recall@5"]["count"] == 8
+    assert len(report["cases"]) == 10
 
 
 def test_budget_loss_and_invalid_citation_are_recorded() -> None:

@@ -13,9 +13,11 @@ from typing import Literal, cast
 from agentic_rag.evaluation.rag_dataset import load_rag_dataset
 from agentic_rag.evaluation.rag_metrics import evidence_metrics
 from agentic_rag.llm.base import LLM, Completion, IncompleteCompletionError, LLMError, Message
+from agentic_rag.llm.fake import FakeLLM
 from agentic_rag.rag.context import SYSTEM, build_context
 from agentic_rag.rag.service import answer
 from agentic_rag.retrieval.models import SearchHit
+from agentic_rag.retrieval.sparse import TOKENIZER_VERSION, BM25Config, BM25Index
 
 
 def fingerprint(value: object) -> str:
@@ -165,3 +167,58 @@ def run_rag_evaluation(
     }
     # Convert UUIDs to JSON-native values; the hash also binds timings and answers.
     return cast(dict[str, object], json.loads(json.dumps(report, default=str)))
+
+
+def run_offline_bm25_evaluation(
+    path: Path,
+    *,
+    k: int = 5,
+    max_prompt_bytes: int = 24000,
+    max_tokens: int = 512,
+) -> dict[str, object]:
+    """Evaluate frozen sources without PostgreSQL, Qdrant, or an external LLM."""
+    _, documents = load_rag_dataset(path)
+    bm25 = BM25Index(list(documents.values()))
+    canonical = {
+        chunk.id: (document, chunk) for document in documents.values() for chunk in document.chunks
+    }
+
+    def search(query: str) -> list[SearchHit]:
+        hits = []
+        for candidate in bm25.query(query, k):
+            document, chunk = canonical[candidate.chunk_id]
+            hits.append(
+                SearchHit(
+                    chunk.id,
+                    document.revision_id,
+                    document.document_id,
+                    candidate.score,
+                    chunk.text,
+                    document.source_uri,
+                    document.title,
+                    chunk.start_char,
+                    chunk.end_char,
+                    chunk.start_line,
+                    chunk.end_line,
+                )
+            )
+        return hits
+
+    return run_rag_evaluation(
+        path,
+        search,
+        FakeLLM(),
+        provider="fake",
+        config={
+            "mode": "offline_bm25",
+            "bm25": asdict(BM25Config()),
+            "tokenizer": TOKENIZER_VERSION,
+            "corpus_policy": "all frozen dataset chunks; one in-memory index per run",
+            "llm_model": "fake-extractive-v1",
+            "temperature": 0,
+            "external_services": False,
+        },
+        k=k,
+        max_prompt_bytes=max_prompt_bytes,
+        max_tokens=max_tokens,
+    )

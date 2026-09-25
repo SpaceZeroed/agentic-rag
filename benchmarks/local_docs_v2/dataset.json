@@ -1,0 +1,941 @@
+{
+  "schema_version": 1,
+  "name": "local_docs_v2_candidate",
+  "label_policy": "Assistant-authored draft questions and evidence on frozen repository documentation. Unanswerability is author judgment. Human audit pending; not independent held-out quality evidence.",
+  "max_chars": 1200,
+  "overlap": 200,
+  "documents": [
+    {
+      "key": "0001-modular-monolith",
+      "path": "corpus/0001-modular-monolith.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0001-modular-monolith.md",
+      "sha256": "f7f2dc79d63a23bbe4905c4ab2262664e127e39a210ab51d5793a370d022017a"
+    },
+    {
+      "key": "0002-foundation-tooling",
+      "path": "corpus/0002-foundation-tooling.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0002-foundation-tooling.md",
+      "sha256": "09dc4f06cd13c1c3e121cd07e0020d22cdbac9a5ced8a74bffb2b4f0720f51c3"
+    },
+    {
+      "key": "0003-document-and-index-ownership",
+      "path": "corpus/0003-document-and-index-ownership.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0003-document-and-index-ownership.md",
+      "sha256": "274d0f525692411543b7f56eac77443079e1e5805929b9fc869baf8f3b7c6564"
+    },
+    {
+      "key": "0004-versioned-ingestion",
+      "path": "corpus/0004-versioned-ingestion.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0004-versioned-ingestion.md",
+      "sha256": "4e24c493fc45d3cd6e587032e802c6ae691a5efd2deb86b86c2917e1c2b5e615"
+    },
+    {
+      "key": "0005-dense-retrieval",
+      "path": "corpus/0005-dense-retrieval.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0005-dense-retrieval.md",
+      "sha256": "9c87f4594ad8190a9418e7c6d1dbb44c18039bff99354e003040a9b5359109dd"
+    },
+    {
+      "key": "0006-bm25-and-rrf",
+      "path": "corpus/0006-bm25-and-rrf.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0006-bm25-and-rrf.md",
+      "sha256": "30e5964c7342e4c3a56a2d45a440f1d3b932db666c481ad71971f31ddee280eb"
+    },
+    {
+      "key": "0007-cross-encoder-reranking",
+      "path": "corpus/0007-cross-encoder-reranking.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0007-cross-encoder-reranking.md",
+      "sha256": "b5bf531e55b0b266b19a1263507f4ad90db975648c50e9fc79e30282f99512b6"
+    },
+    {
+      "key": "0008-basic-rag",
+      "path": "corpus/0008-basic-rag.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0008-basic-rag.md",
+      "sha256": "534c139661f7143ed7f0b15a527ab3d525ac56b84ae972771f0670e08497dc39"
+    },
+    {
+      "key": "0009-rag-evaluation",
+      "path": "corpus/0009-rag-evaluation.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0009-rag-evaluation.md",
+      "sha256": "8b753fafd40f1b0989ea8405b5897db51b7095f719b6c0efc4f5898184cd87cb"
+    },
+    {
+      "key": "0010-http-api",
+      "path": "corpus/0010-http-api.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0010-http-api.md",
+      "sha256": "fae86906e529068cb0b9b5859df3b285712c7ed82641d278a1179f13524b1263"
+    },
+    {
+      "key": "0011-bounded-agent",
+      "path": "corpus/0011-bounded-agent.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0011-bounded-agent.md",
+      "sha256": "12aecdadd4ccd296a925cd921ee1203200bdf9575c0120b78c1d26fe45f272d3"
+    },
+    {
+      "key": "0012-mcp-calculator",
+      "path": "corpus/0012-mcp-calculator.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0012-mcp-calculator.md",
+      "sha256": "c5d5cf5a123a6192ff9abaa29d732f4a168545bc8c859a92eeb4dd889ed89c30"
+    },
+    {
+      "key": "0013-offline-agent-tool-review",
+      "path": "corpus/0013-offline-agent-tool-review.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0013-offline-agent-tool-review.md",
+      "sha256": "90442c01830c8e8b59f84f26ba97a26a04c20e89d334b58f20eb7601b1a75b2c"
+    },
+    {
+      "key": "0014-explicit-observability",
+      "path": "corpus/0014-explicit-observability.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/adr/0014-explicit-observability.md",
+      "sha256": "c8b5f8570f7d5324f993a359279ba6305fdcd1d6d0364e86112c34f113c17297"
+    },
+    {
+      "key": "agent",
+      "path": "corpus/agent.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/agent.md",
+      "sha256": "32293fb38dc5bb34e16169e5f86baf8580002a24ba61bcc19c5f5bc58120b8e7"
+    },
+    {
+      "key": "agent_evaluation",
+      "path": "corpus/agent_evaluation.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/agent_evaluation.md",
+      "sha256": "4828c85938c7864df2059eee66ab89815d166d242bcbb8466743b25200e879aa"
+    },
+    {
+      "key": "api",
+      "path": "corpus/api.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/api.md",
+      "sha256": "e1bd897d3c2df907f25dc089b8b724dc8a07c4dfdded5250e15c72525a56445b"
+    },
+    {
+      "key": "architecture",
+      "path": "corpus/architecture.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/architecture.md",
+      "sha256": "67e2e85a0a5a47661ee57b158b8c6a8420d92a1789ba76d8aef18ea4d4a1aa29"
+    },
+    {
+      "key": "basic_rag",
+      "path": "corpus/basic_rag.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/basic_rag.md",
+      "sha256": "f1208b3c289b6572ec7ab8f96d993e9acf5c246f605cf0b31a47bd95f08c01a0"
+    },
+    {
+      "key": "dense_retrieval",
+      "path": "corpus/dense_retrieval.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/dense_retrieval.md",
+      "sha256": "fad3e954e0437ba0378cf171fe0bdf49ce759c5340b2281c38756f2c6fe351d1"
+    },
+    {
+      "key": "ingestion",
+      "path": "corpus/ingestion.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/ingestion.md",
+      "sha256": "33aaf0440ec5ded99b095cc4eccfdc8d99b1617edba77a88a6eaa87c13316e26"
+    },
+    {
+      "key": "interview_notes",
+      "path": "corpus/interview_notes.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/interview_notes.md",
+      "sha256": "5ed57f62838e60469cf0fee37dbe795d3e97a623fa579d40857f8ca7ca37be35"
+    },
+    {
+      "key": "mcp",
+      "path": "corpus/mcp.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/mcp.md",
+      "sha256": "1bc4294450275b5fc2a9fbb9fc918270d145ee9abbc585559ac0a31cea73604b"
+    },
+    {
+      "key": "observability",
+      "path": "corpus/observability.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/observability.md",
+      "sha256": "a392b399e2c0984d94e50da7e86aa2223eaef9da3f3af61bea15b2962ab4b35a"
+    },
+    {
+      "key": "project_brief",
+      "path": "corpus/project_brief.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/project_brief.md",
+      "sha256": "118227bacc6d14e460a1d95f1ba3d0229d933d22bf96bd4f1267c46c42855869"
+    },
+    {
+      "key": "rag_evaluation",
+      "path": "corpus/rag_evaluation.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/rag_evaluation.md",
+      "sha256": "36c04abaacb07cf084393c161da9676a0e31496f33ba3637f6e8f58eefc28f1f"
+    },
+    {
+      "key": "reranking",
+      "path": "corpus/reranking.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/reranking.md",
+      "sha256": "24d33766c0a8e4ef05219575a86ba0917374641cc9b1dcad402e4746856f4fe8"
+    },
+    {
+      "key": "results",
+      "path": "corpus/results.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/results.md",
+      "sha256": "84e2b0108540c8869cf0088c93e9cd7676ce0779b8584fce9eecbd87725867b5"
+    },
+    {
+      "key": "roadmap",
+      "path": "corpus/roadmap.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/roadmap.md",
+      "sha256": "336cf8f46169f415f9ac58ffea9ebd37d2eece9b73de1770184a0917231bbc3c"
+    },
+    {
+      "key": "sparse_hybrid",
+      "path": "corpus/sparse_hybrid.md",
+      "source_uri": "https://github.com/SpaceZeroed/agentic-rag/blob/5cb3829bb1ed5849fc096546a91b43fe51b47fc7/docs/sparse_hybrid.md",
+      "sha256": "9ccd6351586db5d993ef2ea1d547f80c421c204fa73d3d7dd904f9bb2575ba4d"
+    }
+  ],
+  "questions": [
+    {
+      "id": "answer_01",
+      "language": "ru",
+      "query": "Где находится устанавливаемый пакет?",
+      "answerable": true,
+      "reference_answer": "пакет `agentic_rag` в `src/`",
+      "evidence": [
+        {
+          "document": "0001-modular-monolith",
+          "text": "пакет `agentic_rag` в `src/`"
+        }
+      ]
+    },
+    {
+      "id": "answer_02",
+      "language": "ru",
+      "query": "От чего не зависит доменная логика?",
+      "answerable": true,
+      "reference_answer": "логика не зависит от HTTP-фреймворка и конкретных SDK.",
+      "evidence": [
+        {
+          "document": "0001-modular-monolith",
+          "text": "логика не зависит от HTTP-фреймворка и конкретных SDK."
+        }
+      ]
+    },
+    {
+      "id": "answer_03",
+      "language": "ru",
+      "query": "Какая минимальная версия Python принята?",
+      "answerable": true,
+      "reference_answer": "Python 3.12+",
+      "evidence": [
+        {
+          "document": "0002-foundation-tooling",
+          "text": "Python 3.12+"
+        }
+      ]
+    },
+    {
+      "id": "answer_04",
+      "language": "ru",
+      "query": "Что не фиксирует lockfile?",
+      "answerable": true,
+      "reference_answer": "но не ОС, драйверы, оборудование,",
+      "evidence": [
+        {
+          "document": "0002-foundation-tooling",
+          "text": "но не ОС, драйверы, оборудование,"
+        }
+      ]
+    },
+    {
+      "id": "answer_05",
+      "language": "ru",
+      "query": "Где хранятся текст и чанки?",
+      "answerable": true,
+      "reference_answer": "PostgreSQL.",
+      "evidence": [
+        {
+          "document": "0003-document-and-index-ownership",
+          "text": "PostgreSQL."
+        }
+      ]
+    },
+    {
+      "id": "answer_06",
+      "language": "ru",
+      "query": "Из какого хранилища восстанавливается Qdrant?",
+      "answerable": true,
+      "reference_answer": "восстановлен из PostgreSQL.",
+      "evidence": [
+        {
+          "document": "0003-document-and-index-ownership",
+          "text": "восстановлен из PostgreSQL."
+        }
+      ]
+    },
+    {
+      "id": "answer_07",
+      "language": "ru",
+      "query": "Можно ли проверить ссылку после обновления документа?",
+      "answerable": true,
+      "reference_answer": "Ссылку можно проверить после смены текущей версии.",
+      "evidence": [
+        {
+          "document": "0004-versioned-ingestion",
+          "text": "Ссылку можно проверить после смены текущей версии."
+        }
+      ]
+    },
+    {
+      "id": "answer_08",
+      "language": "ru",
+      "query": "Перезаписывает ли повторная загрузка доказательства незаметно?",
+      "answerable": true,
+      "reference_answer": "повторная загрузка не перезаписывает доказательства незаметно.",
+      "evidence": [
+        {
+          "document": "0004-versioned-ingestion",
+          "text": "повторная загрузка не перезаписывает доказательства незаметно."
+        }
+      ]
+    },
+    {
+      "id": "answer_09",
+      "language": "ru",
+      "query": "Какой провайдер используется для dense-поиска?",
+      "answerable": true,
+      "reference_answer": "CPU-совместимый E5-провайдер",
+      "evidence": [
+        {
+          "document": "0005-dense-retrieval",
+          "text": "CPU-совместимый E5-провайдер"
+        }
+      ]
+    },
+    {
+      "id": "answer_10",
+      "language": "ru",
+      "query": "Что требует смена спецификации индекса?",
+      "answerable": true,
+      "reference_answer": "пересобранного индекса.",
+      "evidence": [
+        {
+          "document": "0005-dense-retrieval",
+          "text": "пересобранного индекса."
+        }
+      ]
+    },
+    {
+      "id": "answer_11",
+      "language": "ru",
+      "query": "Каким методом объединяются BM25 и dense-ранги?",
+      "answerable": true,
+      "reference_answer": "через RRF.",
+      "evidence": [
+        {
+          "document": "0006-bm25-and-rrf",
+          "text": "через RRF."
+        }
+      ]
+    },
+    {
+      "id": "answer_12",
+      "language": "ru",
+      "query": "Что объединяет RRF?",
+      "answerable": true,
+      "reference_answer": "не калиброванные scores;",
+      "evidence": [
+        {
+          "document": "0006-bm25-and-rrf",
+          "text": "не калиброванные scores;"
+        }
+      ]
+    },
+    {
+      "id": "answer_13",
+      "language": "ru",
+      "query": "По чему cross-encoder сортирует кандидатов?",
+      "answerable": true,
+      "reference_answer": "по его logit.",
+      "evidence": [
+        {
+          "document": "0007-cross-encoder-reranking",
+          "text": "по его logit."
+        }
+      ]
+    },
+    {
+      "id": "answer_14",
+      "language": "ru",
+      "query": "Почему сохраняется candidate recall?",
+      "answerable": true,
+      "reference_answer": "не маскирует потерю на предыдущем этапе.",
+      "evidence": [
+        {
+          "document": "0007-cross-encoder-reranking",
+          "text": "не маскирует потерю на предыдущем этапе."
+        }
+      ]
+    },
+    {
+      "id": "answer_15",
+      "language": "ru",
+      "query": "Когда отклоняются неверные цитаты?",
+      "answerable": true,
+      "reference_answer": "отклоняются до выдачи ответа.",
+      "evidence": [
+        {
+          "document": "0008-basic-rag",
+          "text": "отклоняются до выдачи ответа."
+        }
+      ]
+    },
+    {
+      "id": "answer_16",
+      "language": "ru",
+      "query": "Что проверяет детерминированная подмена?",
+      "answerable": true,
+      "reference_answer": "контракт, а не фактическую полезность текста.",
+      "evidence": [
+        {
+          "document": "0008-basic-rag",
+          "text": "контракт, а не фактическую полезность текста."
+        }
+      ]
+    },
+    {
+      "id": "answer_17",
+      "language": "ru",
+      "query": "Какие компоненты качества оцениваются отдельно?",
+      "answerable": true,
+      "reference_answer": "retrieval, покрытие контекста,",
+      "evidence": [
+        {
+          "document": "0009-rag-evaluation",
+          "text": "retrieval, покрытие контекста,"
+        }
+      ]
+    },
+    {
+      "id": "answer_18",
+      "language": "ru",
+      "query": "К чему привязывается семантическая рубрика?",
+      "answerable": true,
+      "reference_answer": "к точному отчёту.",
+      "evidence": [
+        {
+          "document": "0009-rag-evaluation",
+          "text": "к точному отчёту."
+        }
+      ]
+    },
+    {
+      "id": "answer_19",
+      "language": "ru",
+      "query": "Что предоставляет FastAPI?",
+      "answerable": true,
+      "reference_answer": "загрузку, запрос, health и SSE",
+      "evidence": [
+        {
+          "document": "0010-http-api",
+          "text": "загрузку, запрос, health и SSE"
+        }
+      ]
+    },
+    {
+      "id": "answer_20",
+      "language": "ru",
+      "query": "Ускоряет ли async def CPU-вычисления сам по себе?",
+      "answerable": true,
+      "reference_answer": "`async def` сам по себе не ускоряет CPU-вычисления.",
+      "evidence": [
+        {
+          "document": "0010-http-api",
+          "text": "`async def` сам по себе не ускоряет CPU-вычисления."
+        }
+      ]
+    },
+    {
+      "id": "answer_21",
+      "language": "ru",
+      "query": "Какие инструменты доступны агенту?",
+      "answerable": true,
+      "reference_answer": "поиском, каталогом и калькулятором.",
+      "evidence": [
+        {
+          "document": "0011-bounded-agent",
+          "text": "поиском, каталогом и калькулятором."
+        }
+      ]
+    },
+    {
+      "id": "answer_22",
+      "language": "ru",
+      "query": "Гарантируют ли лимиты своевременный полезный отказ?",
+      "answerable": true,
+      "reference_answer": "не гарантируют своевременный полезный отказ.",
+      "evidence": [
+        {
+          "document": "0011-bounded-agent",
+          "text": "не гарантируют своевременный полезный отказ."
+        }
+      ]
+    },
+    {
+      "id": "answer_23",
+      "language": "ru",
+      "query": "Какой числовой тип использует MCP-калькулятор?",
+      "answerable": true,
+      "reference_answer": "`Decimal`",
+      "evidence": [
+        {
+          "document": "0012-mcp-calculator",
+          "text": "`Decimal`"
+        }
+      ]
+    },
+    {
+      "id": "answer_24",
+      "language": "ru",
+      "query": "Нужен ли сетевой сервис для проверки MCP?",
+      "answerable": true,
+      "reference_answer": "без сетевого сервиса.",
+      "evidence": [
+        {
+          "document": "0012-mcp-calculator",
+          "text": "без сетевого сервиса."
+        }
+      ]
+    },
+    {
+      "id": "answer_25",
+      "language": "ru",
+      "query": "По каким данным оцениваются сценарии агента?",
+      "answerable": true,
+      "reference_answer": "по сохранённым неизменяемым трассам",
+      "evidence": [
+        {
+          "document": "0013-offline-agent-tool-review",
+          "text": "по сохранённым неизменяемым трассам"
+        }
+      ]
+    },
+    {
+      "id": "answer_26",
+      "language": "ru",
+      "query": "Равен ли статус выполнения семантической правильности?",
+      "answerable": true,
+      "reference_answer": "семантической правильности;",
+      "evidence": [
+        {
+          "document": "0013-offline-agent-tool-review",
+          "text": "семантической правильности;"
+        }
+      ]
+    },
+    {
+      "id": "answer_27",
+      "language": "ru",
+      "query": "Как включается экспорт в Langfuse?",
+      "answerable": true,
+      "reference_answer": "включается настройкой",
+      "evidence": [
+        {
+          "document": "0014-explicit-observability",
+          "text": "включается настройкой"
+        }
+      ]
+    },
+    {
+      "id": "answer_28",
+      "language": "ru",
+      "query": "Что связывает логи и спаны запроса?",
+      "answerable": true,
+      "reference_answer": "коррелированные JSON-логи и OpenTelemetry-спаны",
+      "evidence": [
+        {
+          "document": "0014-explicit-observability",
+          "text": "коррелированные JSON-логи и OpenTelemetry-спаны"
+        }
+      ]
+    },
+    {
+      "id": "answer_29",
+      "language": "ru",
+      "query": "Какой статус даёт повторная загрузка того же файла?",
+      "answerable": true,
+      "reference_answer": "статус будет `unchanged`",
+      "evidence": [
+        {
+          "document": "ingestion",
+          "text": "статус будет `unchanged`"
+        }
+      ]
+    },
+    {
+      "id": "answer_30",
+      "language": "ru",
+      "query": "Какие форматы показывает схема загрузки?",
+      "answerable": true,
+      "reference_answer": "Markdown / TXT, UTF-8",
+      "evidence": [
+        {
+          "document": "ingestion",
+          "text": "Markdown / TXT, UTF-8"
+        }
+      ]
+    },
+    {
+      "id": "answer_31",
+      "language": "ru",
+      "query": "Как BM25 учитывает длину текста?",
+      "answerable": true,
+      "reference_answer": "с учётом их частоты, редкости и длины текста.",
+      "evidence": [
+        {
+          "document": "sparse_hybrid",
+          "text": "с учётом их частоты, редкости и длины текста."
+        }
+      ]
+    },
+    {
+      "id": "answer_32",
+      "language": "ru",
+      "query": "Что делает токенизатор с русскими буквами?",
+      "answerable": true,
+      "reference_answer": "Русские буквы сохраняются, но не переводятся.",
+      "evidence": [
+        {
+          "document": "sparse_hybrid",
+          "text": "Русские буквы сохраняются, но не переводятся."
+        }
+      ]
+    },
+    {
+      "id": "answer_33",
+      "language": "ru",
+      "query": "Какая модель выбрана для reranking?",
+      "answerable": true,
+      "reference_answer": "`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`",
+      "evidence": [
+        {
+          "document": "reranking",
+          "text": "`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`"
+        }
+      ]
+    },
+    {
+      "id": "answer_34",
+      "language": "ru",
+      "query": "Сколько кандидатов в исходной конфигурации reranker?",
+      "answerable": true,
+      "reference_answer": "20 кандидатов и top-5.",
+      "evidence": [
+        {
+          "document": "reranking",
+          "text": "20 кандидатов и top-5."
+        }
+      ]
+    },
+    {
+      "id": "answer_35",
+      "language": "ru",
+      "query": "Что происходит с чанком, который не входит в бюджет контекста?",
+      "answerable": true,
+      "reference_answer": "Слишком большой чанк пропускается",
+      "evidence": [
+        {
+          "document": "basic_rag",
+          "text": "Слишком большой чанк пропускается"
+        }
+      ]
+    },
+    {
+      "id": "answer_36",
+      "language": "ru",
+      "query": "В чём выражен лимит размера prompt по умолчанию?",
+      "answerable": true,
+      "reference_answer": "24000 UTF-8 байт сериализованного массива сообщений",
+      "evidence": [
+        {
+          "document": "basic_rag",
+          "text": "24000 UTF-8 байт сериализованного массива сообщений"
+        }
+      ]
+    },
+    {
+      "id": "answer_37",
+      "language": "ru",
+      "query": "Какая архитектура обработчиков API выбрана?",
+      "answerable": true,
+      "reference_answer": "async HTTP-граница с вынесением существующих блокирующих операций в поток.",
+      "evidence": [
+        {
+          "document": "api",
+          "text": "async HTTP-граница с вынесением существующих блокирующих операций в поток."
+        }
+      ]
+    },
+    {
+      "id": "answer_38",
+      "language": "ru",
+      "query": "Когда запускаются миграции API?",
+      "answerable": true,
+      "reference_answer": "Миграции запускаются явно, не при импорте или старте API.",
+      "evidence": [
+        {
+          "document": "api",
+          "text": "Миграции запускаются явно, не при импорте или старте API."
+        }
+      ]
+    },
+    {
+      "id": "answer_39",
+      "language": "ru",
+      "query": "Чем трасса отличается от метрики?",
+      "answerable": true,
+      "reference_answer": "Трасса — связанное дерево интервалов работы одного запроса.",
+      "evidence": [
+        {
+          "document": "observability",
+          "text": "Трасса — связанное дерево интервалов работы одного запроса."
+        }
+      ]
+    },
+    {
+      "id": "answer_40",
+      "language": "ru",
+      "query": "Используется ли глобальный OTEL TracerProvider для Langfuse?",
+      "answerable": true,
+      "reference_answer": "не глобальный provider других библиотек.",
+      "evidence": [
+        {
+          "document": "observability",
+          "text": "не глобальный provider других библиотек."
+        }
+      ]
+    },
+    {
+      "id": "absent_01",
+      "language": "ru",
+      "query": "Какой точный процент ошибок был у production-трафика в августе 2026?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_02",
+      "language": "ru",
+      "query": "Какой пароль у production PostgreSQL?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_03",
+      "language": "ru",
+      "query": "Сколько пользователей ежедневно обращаются к публичному API?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_04",
+      "language": "ru",
+      "query": "Какая цена Qdrant Cloud установлена для этого проекта?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_05",
+      "language": "ru",
+      "query": "Какой номер GPU используется для обучения E5?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_06",
+      "language": "ru",
+      "query": "В каком регионе размещён production-кластер Kubernetes?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_07",
+      "language": "ru",
+      "query": "Какая фамилия у независимого человеческого рецензента набора?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_08",
+      "language": "ru",
+      "query": "Какой SLA гарантирован внешним LLM-провайдером?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_09",
+      "language": "ru",
+      "query": "Сколько запросов в секунду выдерживает production API?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "absent_10",
+      "language": "ru",
+      "query": "Каков секретный токен Langfuse?",
+      "answerable": false,
+      "reference_answer": "В корпусе нет подтверждения; следует отказаться от ответа.",
+      "evidence": []
+    },
+    {
+      "id": "english_01",
+      "language": "en",
+      "query": "Which store is the source of truth for document text?",
+      "answerable": true,
+      "reference_answer": "PostgreSQL.",
+      "evidence": [
+        {
+          "document": "0003-document-and-index-ownership",
+          "text": "PostgreSQL."
+        }
+      ]
+    },
+    {
+      "id": "english_02",
+      "language": "en",
+      "query": "Which ranking fusion method combines dense and BM25?",
+      "answerable": true,
+      "reference_answer": "через RRF.",
+      "evidence": [
+        {
+          "document": "0006-bm25-and-rrf",
+          "text": "через RRF."
+        }
+      ]
+    },
+    {
+      "id": "english_03",
+      "language": "en",
+      "query": "Which numeric type is used by the MCP calculator?",
+      "answerable": true,
+      "reference_answer": "`Decimal`",
+      "evidence": [
+        {
+          "document": "0012-mcp-calculator",
+          "text": "`Decimal`"
+        }
+      ]
+    },
+    {
+      "id": "english_04",
+      "language": "en",
+      "query": "What is the status of ingesting an unchanged file?",
+      "answerable": true,
+      "reference_answer": "статус будет `unchanged`",
+      "evidence": [
+        {
+          "document": "ingestion",
+          "text": "статус будет `unchanged`"
+        }
+      ]
+    },
+    {
+      "id": "english_05",
+      "language": "en",
+      "query": "Does the default prompt budget count tokens?",
+      "answerable": true,
+      "reference_answer": "24000 UTF-8 байт сериализованного массива сообщений",
+      "evidence": [
+        {
+          "document": "basic_rag",
+          "text": "24000 UTF-8 байт сериализованного массива сообщений"
+        }
+      ]
+    },
+    {
+      "id": "multi_01",
+      "language": "ru",
+      "query": "Где хранится канонический текст и каким провайдером строятся dense-векторы?",
+      "answerable": true,
+      "reference_answer": "PostgreSQL. CPU-совместимый E5-провайдер",
+      "evidence": [
+        {
+          "document": "0003-document-and-index-ownership",
+          "text": "PostgreSQL."
+        },
+        {
+          "document": "0005-dense-retrieval",
+          "text": "CPU-совместимый E5-провайдер"
+        }
+      ]
+    },
+    {
+      "id": "multi_02",
+      "language": "ru",
+      "query": "Каким методом объединяются BM25 и dense, и как затем сортируются кандидаты reranker?",
+      "answerable": true,
+      "reference_answer": "через RRF. по его logit.",
+      "evidence": [
+        {
+          "document": "0006-bm25-and-rrf",
+          "text": "через RRF."
+        },
+        {
+          "document": "0007-cross-encoder-reranking",
+          "text": "по его logit."
+        }
+      ]
+    },
+    {
+      "id": "multi_03",
+      "language": "ru",
+      "query": "Когда проверяются ссылки ответа и что дополнительно оценивает RAG-рубрика?",
+      "answerable": true,
+      "reference_answer": "отклоняются до выдачи ответа. поддержку утверждений и отказ.",
+      "evidence": [
+        {
+          "document": "0008-basic-rag",
+          "text": "отклоняются до выдачи ответа."
+        },
+        {
+          "document": "0009-rag-evaluation",
+          "text": "поддержку утверждений и отказ."
+        }
+      ]
+    },
+    {
+      "id": "multi_04",
+      "language": "ru",
+      "query": "Что предоставляет HTTP API и гарантируют ли лимиты агента своевременный отказ?",
+      "answerable": true,
+      "reference_answer": "загрузку, запрос, health и SSE не гарантируют своевременный полезный отказ.",
+      "evidence": [
+        {
+          "document": "0010-http-api",
+          "text": "загрузку, запрос, health и SSE"
+        },
+        {
+          "document": "0011-bounded-agent",
+          "text": "не гарантируют своевременный полезный отказ."
+        }
+      ]
+    },
+    {
+      "id": "multi_05",
+      "language": "ru",
+      "query": "Каков статус повторной загрузки и проверяема ли старая ссылка?",
+      "answerable": true,
+      "reference_answer": "статус будет `unchanged` Ссылку можно проверить после смены текущей версии.",
+      "evidence": [
+        {
+          "document": "ingestion",
+          "text": "статус будет `unchanged`"
+        },
+        {
+          "document": "0004-versioned-ingestion",
+          "text": "Ссылку можно проверить после смены текущей версии."
+        }
+      ]
+    }
+  ]
+}
